@@ -1,5 +1,5 @@
 -- ====================================================================
--- 🍎 ENI AUTO HOP FRUIT v6.0 - ANIME PIECE (GGMAX FRUIT SNIPER)
+-- 🍎 ENI AUTO HOP FRUIT v7.0 - ANIME PIECE (GGMAX FRUIT SNIPER)
 -- Pega Frutas no Mapa + Gira no Luzefe + Compra Mítica na Loja
 -- Guarda tudo no Storage + Envia Webhook Discord + Server Hop Automático
 -- ====================================================================
@@ -7,13 +7,13 @@
 repeat task.wait() until game:IsLoaded() and game:GetService("Players").LocalPlayer
 
 getgenv().ENI_FruitHopConfig = getgenv().ENI_FruitHopConfig or {
-    Enabled           = true,
-    WebhookUrl        = "",       -- Cole seu Webhook do Discord aqui
-    SpinFruitBeforeHop = true,    -- Gira fruta no Luzefe ($35k) antes de pular se sem cooldown
-    BuyMythicInStock  = true,     -- Compra Infinity / Vessel se estiver em estoque no servidor
-    GrabChestsBeforeHop = false,  -- Se true, pega 2-3 baús rápidos antes de pular
-    WaitBeforeHop     = 3.5,      -- Segundos para escanear o servidor antes de pular
-    AutoReExecOnHop   = true,     -- Usa queue_on_teleport para continuar após o hop
+    Enabled             = true,
+    WebhookUrl          = "",       -- Cole seu Webhook do Discord aqui
+    SpinFruitBeforeHop  = true,     -- Gira fruta no Luzefe ($35k) antes de pular se sem cooldown
+    BuyMythicInStock    = true,     -- Compra Infinity / Vessel se estiver em estoque no servidor
+    GrabChestsBeforeHop = false,    -- Se true, pega 2-3 baús rápidos antes de pular
+    WaitBeforeHop       = 3.5,      -- Segundos para escanear o servidor antes de pular
+    AutoReExecOnHop     = true,     -- Usa queue_on_teleport para continuar após o hop
 }
 
 local Players = game:GetService("Players")
@@ -22,6 +22,7 @@ local Workspace = game:GetService("Workspace")
 local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
 local GuiService = game:GetService("GuiService")
+local RunService = game:GetService("RunService")
 local CoreGui = game:GetService("CoreGui")
 
 local LocalPlayer = Players.LocalPlayer
@@ -30,10 +31,27 @@ local DialogueRemote = Remotes:WaitForChild("Dialogue Event")
 local PhysicalFruitsRemote = Remotes:WaitForChild("Physical Fruits Event")
 local FruitShopRemote = Remotes:FindFirstChild("Fruit Shop Event")
 
--- Auto-Rejoin se der erro no teleporte
-GuiService.ErrorMessageChanged:Connect(function()
-    task.wait(2)
-    TeleportService:Teleport(game.PlaceId, LocalPlayer)
+-- Auto-Rejoin com tripla camada anti-kick se der erro de conexão
+local function triggerRejoin()
+    pcall(function()
+        if GuiService.ClearError then GuiService:ClearError() end
+        TeleportService:Teleport(game.PlaceId, LocalPlayer)
+    end)
+end
+
+pcall(function()
+    GuiService.ErrorMessageChanged:Connect(triggerRejoin)
+    local po = CoreGui:WaitForChild("RobloxPromptGui", 5) and CoreGui.RobloxPromptGui:WaitForChild("promptOverlay", 5)
+    if po then
+        po.ChildAdded:Connect(function(c)
+            if c.Name == "ErrorPrompt" then triggerRejoin() end
+        end)
+    end
+    RunService.Heartbeat:Connect(function()
+        if GuiService.GetErrorCode and GuiService:GetErrorCode().Value > 0 then
+            triggerRejoin()
+        end
+    end)
 end)
 
 -- Registra queue_on_teleport para continuar automaticamente no próximo servidor
@@ -42,7 +60,7 @@ if qot and getgenv().ENI_FruitHopConfig.AutoReExecOnHop and not getgenv().ENI_Ho
     getgenv().ENI_HopQueued = true
     pcall(function()
         qot([[
-            repeat task.wait() until game:IsLoaded()
+            repeat task.wait() until game:IsLoaded() and game:GetService("Players").LocalPlayer
             loadstring(game:HttpGet("https://raw.githubusercontent.com/Pedrohs1771/anime-piece-ggmax/main/auto_hop_fruit.lua"))()
         ]])
     end)
@@ -102,7 +120,7 @@ Title.BackgroundTransparency = 1
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 13
 Title.TextColor3 = Color3.fromRGB(255, 195, 40)
-Title.Text = "🍎 ENI AUTO HOP FRUIT v6.0 (GGMAX)"
+Title.Text = "🍎 ENI AUTO HOP FRUIT v7.0 (GGMAX)"
 Title.Parent = Frame
 
 local Status = Instance.new("TextLabel")
@@ -133,21 +151,19 @@ StopBtn.MouseButton1Click:Connect(function()
 end)
 
 local function storeAllBackpackFruits()
-    local renv = getrenv and getrenv() or _G
-    local gd = (renv._G and renv._G.GameData) or _G.GameData
-    local itemsData = gd and gd["Items Data"]
     local char = LocalPlayer.Character
     local hum = char and char:FindFirstChildOfClass("Humanoid")
-    if not (itemsData and hum) then return end
+    if not hum then return end
 
     for _, tool in ipairs(LocalPlayer.Backpack:GetChildren()) do
-        if tool:IsA("Tool") and itemsData[tool.Name] and itemsData[tool.Name].Category == "Fruits" then
+        if tool:IsA("Tool") and string.find(tool.Name, "Fruit") then
             Status.Text = "📦 Guardando no Storage: " .. tool.Name
             hum:EquipTool(tool)
-            task.wait(0.3)
-            PhysicalFruitsRemote:FireServer("Storage", tool.Name)
+            task.wait(0.25)
+            pcall(function() PhysicalFruitsRemote:FireServer("Store") end)
+            pcall(function() PhysicalFruitsRemote:FireServer("Storage", tool.Name) end)
             sendFruitWebhook("🍎 Fruta Coletada & Guardada!", tool.Name)
-            task.wait(0.4)
+            task.wait(0.35)
         end
     end
 end

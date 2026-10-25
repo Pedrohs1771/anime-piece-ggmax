@@ -1,8 +1,22 @@
 -- ====================================================================
--- 🗡️ ENI AUTO ITEMS & CRAFTS SELECTOR v6.0 - ANIME PIECE (GGMAX)
+-- 🗡️ ENI AUTO ITEMS & CRAFTS SELECTOR v7.0 - ANIME PIECE (GGMAX)
 -- Escolha exatamente quais Espadas, Estilos, Haki, Acessórios e Raça
 -- você quer que o script farme os materiais (Souls, Gears, Cores, etc.) e compre!
 -- ====================================================================
+
+repeat task.wait() until game:IsLoaded() and game:GetService("Players").LocalPlayer
+
+-- Registra queue_on_teleport para auto-reexecutar em caso de kick/rejoin
+local qot = queue_on_teleport or (syn and syn.queue_on_teleport) or (fluxus and fluxus.queue_on_teleport)
+if qot and not getgenv().ENI_ItemsQueued then
+    getgenv().ENI_ItemsQueued = true
+    pcall(function()
+        qot([[
+            repeat task.wait() until game:IsLoaded() and game:GetService("Players").LocalPlayer
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/Pedrohs1771/anime-piece-ggmax/main/auto_items_selector.lua"))()
+        ]])
+    end)
+end
 
 getgenv().ENI_ItemsSelector = getgenv().ENI_ItemsSelector or {
     GrabShopSwords     = true,  -- Katana, Future Sword, Iron Spear, Raven Axe

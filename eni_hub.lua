@@ -1,11 +1,23 @@
 -- ====================================================================
--- ⚡ ENI HUB v6.0 - ANIME PIECE (GGMAX ULTIMATE EDITION)
+-- ⚡ ENI HUB v7.0 - ANIME PIECE (GGMAX FINAL PRO SUITE)
 -- HUD Completa com Abas | Turbo Farm Anti-Kick | Seletor de Itens
--- Auto Hop Fruit | Auto Rejoin | Discord Webhook Formatado p/ GGMAX
+-- Auto Hop Fruit | Auto Rejoin Autônomo | Discord Webhook GGMAX
 -- Desenvolvido por ENI para o Tris ⚡
 -- ====================================================================
 
 repeat task.wait() until game:IsLoaded() and game:GetService("Players").LocalPlayer
+
+-- Registra queue_on_teleport para reexecutar sozinho se o celular/executor desconectar ou mudar de server
+local qot = queue_on_teleport or (syn and syn.queue_on_teleport) or (fluxus and fluxus.queue_on_teleport)
+if qot and not getgenv().ENI_HubQueued then
+    getgenv().ENI_HubQueued = true
+    pcall(function()
+        qot([[
+            repeat task.wait() until game:IsLoaded() and game:GetService("Players").LocalPlayer
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/Pedrohs1771/anime-piece-ggmax/main/eni_hub.lua"))()
+        ]])
+    end)
+end
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -123,13 +135,14 @@ LocalPlayer.Idled:Connect(function()
     end)
 end)
 
--- Auto-Rejoin ao tomar Kick / Desconexão
+-- Auto-Rejoin Autônomo ao tomar Kick / Desconexão (Tripla Camada Anti-Kick)
 local function triggerRejoin()
     if not getgenv().ENI_Config.AutoRejoin or getgenv().ENI_Rejoining then return end
     getgenv().ENI_Rejoining = true
     task.spawn(function()
         while getgenv().ENI_Config.AutoRejoin do
             pcall(function()
+                if GuiService.ClearError then GuiService:ClearError() end
                 TeleportService:Teleport(game.PlaceId, LocalPlayer)
             end)
             task.wait(2.5)
@@ -145,6 +158,11 @@ pcall(function()
             if c.Name == "ErrorPrompt" then triggerRejoin() end
         end)
     end
+    RunService.Heartbeat:Connect(function()
+        if GuiService.GetErrorCode and GuiService:GetErrorCode().Value > 0 then
+            triggerRejoin()
+        end
+    end)
 end)
 
 -- ====================================================================
@@ -1116,19 +1134,81 @@ task.spawn(function()
                     currentFarmState = matTarget.reason .. " (Aguardando Respawn)"
                 end
 
-            -- 12. TURBO TASK FARM (100% DIALOGUE EVENT = ZERO KICK!)
-            elseif cfg.TurboTaskFarm and level >= 100 then
-                currentTargetPart = nil
-                currentFarmState = "⚡ Turbo Task [ElementsQuest] (+2k XP / +$500)"
-                if questId ~= "ElementsQuest" and questId ~= "None" then
-                    safeFireRemote(QuestRemote, "Quit")
-                end
-                if ps.Quest.QuestId.Value == "None" then
-                    safeFireRemote(DialogueRemote, {"Quest", "ElementsQuest"})
-                end
-                for _, el in ipairs({"Blue Element", "Red Element", "Pink Element", "Yellow Element"}) do
-                    if getgenv().ENI_HubId ~= HubId or not getgenv().ENI_Config.TurboTaskFarm then break end
-                    safeFireRemote(DialogueRemote, {"ElementsQuest", el})
+            -- 12. TURBO SPEED LEVEL FARM (MULTI-FASE: 0->84 COMBAT, 85->179 ELEMENTS, 180->245 DOLLS & BOSSES)
+            elseif cfg.TurboTaskFarm and level >= 85 then
+                if level < 180 then
+                    -- Nível 85 a 179: ElementsQuest instantâneo via Dialogue Event (+2k XP / +$500)
+                    currentTargetPart = nil
+                    currentFarmState = "⚡ Turbo Task [ElementsQuest] (+2k XP / +$500)"
+                    if questId ~= "ElementsQuest" and questId ~= "None" then
+                        safeFireRemote(QuestRemote, "Quit")
+                    end
+                    if ps.Quest.QuestId.Value == "None" then
+                        safeFireRemote(DialogueRemote, {"Quest", "ElementsQuest"})
+                    end
+                    for _, el in ipairs({"Blue Element", "Red Element", "Pink Element", "Yellow Element"}) do
+                        if getgenv().ENI_HubId ~= HubId or not getgenv().ENI_Config.TurboTaskFarm then break end
+                        safeFireRemote(DialogueRemote, {"ElementsQuest", el})
+                    end
+                elseif level < 245 then
+                    -- Nível 180 a 245: Cursed Dolls (Quest 025: +37,000 XP) + Boss Snipers (White Panda 239k XP, Overtime 142k XP)
+                    local panda = (level >= 225) and findAliveMobForList({"White Panda"})
+                    local overtime = (level >= 205) and findAliveMobForList({"Overtime Sorcerer"})
+                    local cdRemote = SpecialsFolder and SpecialsFolder:FindFirstChild("Cursed Dolls Event")
+
+                    if panda then
+                        currentFarmState = "🐼 Matando White Panda Boss (+239k XP)"
+                        if questId ~= "029" and questId ~= "None" then safeFireRemote(QuestRemote, "Quit") end
+                        if ps.Quest.QuestId.Value == "None" then safeFireRemote(DialogueRemote, {"Quest", "029"}) end
+                        local mhrp = panda:FindFirstChild("HumanoidRootPart")
+                        if mhrp then
+                            currentTargetPart = mhrp
+                            local tool = ensureWeaponEquipped()
+                            if safeFireCombat(comboHit) then comboHit = (comboHit >= 4) and 1 or (comboHit + 1) end
+                            if tool then fireWeaponSkills(tool.Name, mhrp.Position) end
+                        end
+                    elseif overtime then
+                        currentFarmState = "⌛ Matando Overtime Sorcerer Boss (+142k XP)"
+                        if questId ~= "027" and questId ~= "None" then safeFireRemote(QuestRemote, "Quit") end
+                        if ps.Quest.QuestId.Value == "None" then safeFireRemote(DialogueRemote, {"Quest", "027"}) end
+                        local mhrp = overtime:FindFirstChild("HumanoidRootPart")
+                        if mhrp then
+                            currentTargetPart = mhrp
+                            local tool = ensureWeaponEquipped()
+                            if safeFireCombat(comboHit) then comboHit = (comboHit >= 4) and 1 or (comboHit + 1) end
+                            if tool then fireWeaponSkills(tool.Name, mhrp.Position) end
+                        end
+                    else
+                        currentTargetPart = nil
+                        currentFarmState = "🎎 Coletando Cursed Dolls [Quest 025] (+37k XP)"
+                        if questId ~= "025" and questId ~= "None" then
+                            safeFireRemote(QuestRemote, "Quit")
+                            task.wait(0.35)
+                        end
+                        if ps.Quest.QuestId.Value == "None" then
+                            safeFireRemote(DialogueRemote, {"Quest", "025"})
+                            task.wait(0.35)
+                        end
+                        if cdRemote and ps.Quest.QuestId.Value == "025" then
+                            safeFireRemote(cdRemote, "CollectCurseDoll")
+                            task.wait(0.8)
+                        end
+                    end
+                else
+                    -- Level 245 (MAX LEVEL ATINGIDO!)
+                    currentTargetPart = nil
+                    currentFarmState = "👑 LEVEL 245 MÁXIMO ATINGIDO! Farmando Beli..."
+                    if questId ~= "025" and questId ~= "None" then
+                        safeFireRemote(QuestRemote, "Quit")
+                    end
+                    if ps.Quest.QuestId.Value == "None" then
+                        safeFireRemote(DialogueRemote, {"Quest", "025"})
+                    end
+                    local cdRemote = SpecialsFolder and SpecialsFolder:FindFirstChild("Cursed Dolls Event")
+                    if cdRemote and ps.Quest.QuestId.Value == "025" then
+                        safeFireRemote(cdRemote, "CollectCurseDoll")
+                        task.wait(0.8)
+                    end
                 end
 
             -- 13. COMBAT AUTO-FARM (MOBS & BOSSES)

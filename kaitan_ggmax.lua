@@ -1,18 +1,32 @@
 -- ====================================================================
--- 🤖 ENI KAITAN GGMAX v6.0 - AUTO FARM LEVEL MAX + GRAB ALL + MONEY
+-- 🤖 ENI KAITAN GGMAX v7.0 - AUTO FARM LEVEL MAX + GRAB ALL + MONEY
 -- Script 100% Automático (Kaitan) para Farmar Contas p/ Vender na GGMAX
--- Level 0 -> 100 (Combate) | Level 100 -> 245 Max + Money Infinito (Turbo Task)
--- Pega Espadas, Estilos, Haki, Raça Mítica, Frutas + Envia Anúncio no Webhook
+-- Level 0 -> 84 (Combate) | Level 85 -> 179 (Elements) | Level 180 -> 245 Max (Dolls & Bosses)
+-- Pega Espadas, Estilos, Haki, Raça Mítica, Frutas + Envia Anúncio Pronto no Webhook
 -- ====================================================================
+
+repeat task.wait() until game:IsLoaded() and game:GetService("Players").LocalPlayer
+
+-- Registra queue_on_teleport para auto-reexecutar o Kaitan em caso de kick ou teleporte
+local qot = queue_on_teleport or (syn and syn.queue_on_teleport) or (fluxus and fluxus.queue_on_teleport)
+if qot and not getgenv().ENI_KaitanQueued then
+    getgenv().ENI_KaitanQueued = true
+    pcall(function()
+        qot([[
+            repeat task.wait() until game:IsLoaded() and game:GetService("Players").LocalPlayer
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/Pedrohs1771/anime-piece-ggmax/main/kaitan_ggmax.lua"))()
+        ]])
+    end)
+end
 
 getgenv().GGMAX_Kaitan = getgenv().GGMAX_Kaitan or {
     WebhookUrl         = "",            -- Cole seu Webhook do Discord aqui
-    TargetLevel        = 245,           -- Level Máximo do jogo
-    TargetMoney        = 1000000,       -- Quanto de Money ($) farmar antes de avisar no Webhook
+    TargetLevel        = 245,           -- Level Máximo do jogo (245)
+    TargetMoney        = 500000,        -- Quanto de Money ($) farmar antes de notificar no Webhook
     GrabAllShopSwords  = true,          -- Katana, Future Sword, Iron Spear, Raven Axe
     GrabAllToolsPoses  = true,          -- Axe, Iron Hoe, Wrench, Pickaxe + Todas as Poses
     GrabAllAccessories = true,          -- Scouter, Uniforms, Basic Dark Cloak
-    UnlockFlashStep    = true,          -- Farma as Souls que faltam e compra Flash Step
+    UnlockFlashStep    = true,          -- Farma as Souls e compra Flash Step
     UnlockBlackLeg     = true,          -- Compra Black Leg ($15k)
     UnlockRoboticStyle = true,          -- Farma 45x Gear + 5x Core e compra Robotic Style
     UnlockShadowBlade  = true,          -- Farma 2x Magic Ball e compra Shadow Blade
@@ -24,7 +38,7 @@ getgenv().GGMAX_Kaitan = getgenv().GGMAX_Kaitan or {
     AutoRejoinOnKick   = true,          -- Reentra sozinho se cair ou tomar kick
 }
 
--- Carrega o núcleo completo do ENI Hub v6.0 sincronizando as configurações Kaitan
+-- Sincroniza configurações com o motor do ENI Hub v7.0
 getgenv().ENI_Config = {
     TurboTaskFarm      = true,
     AutoFarmCombat     = true,
