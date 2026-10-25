@@ -118,7 +118,7 @@ end
 
 local function safeFireCombat(comboIndex)
     local now = os.clock()
-    if now - getgenv().ENI_LastM1Fire >= 0.42 and now - (getgenv().ENI_NextPacketTime or 0) >= 0.18 then
+    if now - (getgenv().ENI_LastM1Fire or 0) >= 0.28 and now - (getgenv().ENI_NextPacketTime or 0) >= 0.18 then
         getgenv().ENI_LastM1Fire = now
         getgenv().ENI_NextPacketTime = now
         pcall(CombatRemote.FireServer, CombatRemote, comboIndex)
@@ -369,7 +369,7 @@ local function findAliveMobForList(mobNames)
     local bestMob, bestDist = nil, math.huge
 
     for _, model in ipairs(enemysFolder:GetChildren()) do
-        if model:IsA("Model") then
+        if model:IsA("Model") and not model:GetAttribute("GhostBugged") then
             local realName = model:GetAttribute("RealName") or model.Name
             local matches = false
             for _, targetName in ipairs(mobNames) do
@@ -380,11 +380,9 @@ local function findAliveMobForList(mobNames)
             end
             if matches then
                 local hum = model:FindFirstChildOfClass("Humanoid")
-                if hum and hum.Health > 0 then
-                    local mhrp = model:FindFirstChild("HumanoidRootPart")
-                    local pos = mhrp and mhrp.Position or model:GetPivot().Position
-                    local dist = hrp and (hrp.Position - pos).Magnitude or 0
-                    if mhrp then dist = dist - 10000 end
+                local mhrp = model:FindFirstChild("HumanoidRootPart")
+                if hum and hum.Health > 0 and mhrp then
+                    local dist = hrp and (hrp.Position - mhrp.Position).Magnitude or 0
                     if dist < bestDist then
                         bestDist = dist
                         bestMob = model
@@ -397,18 +395,22 @@ local function findAliveMobForList(mobNames)
 end
 
 local function getBestQuestForLevel(level)
-    local bestBossQuest, bestMobQuest = nil, nil
-    for _, q in ipairs(CombatQuests) do
+    for i = #CombatQuests, 1, -1 do
+        local q = CombatQuests[i]
         if level >= q.lvl then
-            if q.boss then bestBossQuest = q else bestMobQuest = q end
+            local mob = findAliveMobForList(q.mobs)
+            if mob then
+                return q
+            end
         end
     end
-    if bestBossQuest and (not bestMobQuest or bestBossQuest.lvl >= bestMobQuest.lvl) then
-        if findAliveMobForList(bestBossQuest.mobs) then
-            return bestBossQuest
+    for i = #CombatQuests, 1, -1 do
+        local q = CombatQuests[i]
+        if level >= q.lvl then
+            return q
         end
     end
-    return bestMobQuest or bestBossQuest or CombatQuests[1]
+    return CombatQuests[1]
 end
 
 -- Retorna o mob específico caso o usuário tenha ativado farm de algum material que falta
@@ -1121,7 +1123,6 @@ task.spawn(function()
                         local tool = ensureWeaponEquipped()
                         if safeFireCombat(comboHit) then
                             comboHit = (comboHit >= 4) and 1 or (comboHit + 1)
-                            if comboHit == 1 then getgenv().ENI_LastM1Fire = os.clock() + 0.82 end
                         end
                         if tool then fireWeaponSkills(tool.Name, mhrp.Position) end
                     end
@@ -1251,7 +1252,6 @@ task.spawn(function()
                         local tool = ensureWeaponEquipped()
                         if safeFireCombat(comboHit) then
                             comboHit = (comboHit >= 4) and 1 or (comboHit + 1)
-                            if comboHit == 1 then getgenv().ENI_LastM1Fire = os.clock() + 0.82 end
                         end
                         if tool then fireWeaponSkills(tool.Name, mhrp.Position) end
                     end
