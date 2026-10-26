@@ -33,7 +33,7 @@ getgenv().GGMAX_Kaitan = getgenv().GGMAX_Kaitan or {
     UnlockHaki         = true,          -- Compra Armament Haki V1 / V2 / V3
     SpinTopRace        = true,          -- Gira Raça até Infernal / Curse / Fighter / Gamer
     BuyMythicStock     = true,          -- Compra Infinity ($225k) ou Vessel ($265k) se na loja
-    AutoSpinFruit      = true,          -- Gira fruta no Luzefe a cada 1h e guarda no Storage
+    AutoSpinFruit      = false,         -- Só gira fruta após Level 245 para não interromper o farm
     AutoGrabMapFruits  = true,          -- Pega frutas no chão e guarda no Storage
     AutoRejoinOnKick   = true,          -- Reentra sozinho se cair ou tomar kick
 }

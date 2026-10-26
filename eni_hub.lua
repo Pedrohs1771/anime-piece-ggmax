@@ -1179,11 +1179,11 @@ task.spawn(function()
                 storeAllFruitsInHub()
             end
 
-            -- 6. AUTO-GIRAR FRUTA (LUZEFE COM TELEPORTE + 5.8s ROLL + AUTO-STORAGE)
-            if cfg.AutoSpinFruit and level >= 50 and os.clock() - lastGachaTry > 20 then
+            -- 6. AUTO-GIRAR FRUTA NO LUZEFE (SOMENTE APÓS LEVEL 245 MAX PARA NUNCA ATRAPALHAR O FARM DO 0->245)
+            if cfg.AutoSpinFruit and level >= 245 and os.clock() - lastGachaTry > 60 then
                 local spinCd = ps.Infos:FindFirstChild("LastFruitTimeSpin")
                 local reqMoney = math.max(540, (level - 49) * 540)
-                if (not spinCd or spinCd.Value <= 0) and money >= reqMoney then
+                if spinCd and spinCd.Value == 0 and money >= (reqMoney + 5000) then
                     lastGachaTry = os.clock()
                     currentTargetPart = nil
                     currentFarmState = "🎰 Girando Fruta no Luzefe (5.8s)..."
