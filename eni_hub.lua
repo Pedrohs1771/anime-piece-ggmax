@@ -168,24 +168,14 @@ end)
 -- 2. DADOS DE QUESTS, ILHAS E MATERIAIS DE DROP
 -- ====================================================================
 local CombatQuests = {
-    {id = "001", lvl = 0,   mobs = {"Bandit"},                   boss = false, island = "Foosha",          pos = Vector3.new(440.9, 8.3, -991.5)},
-    {id = "003", lvl = 20,  mobs = {"Higaro’s bandit"},          boss = false, island = "Foosha",          pos = Vector3.new(13.7, 7.9, -1142.1)},
-    {id = "006", lvl = 40,  mobs = {"Higaro"},                   boss = true,  island = "Foosha",          pos = Vector3.new(235.6, 7.9, -1442.3)},
-    {id = "007", lvl = 45,  mobs = {"Warrior Monkey"},           boss = false, island = "JungleIsland",    pos = Vector3.new(-905.7, 9.2, 104.0)},
-    {id = "009", lvl = 60,  mobs = {"Knight Monkey"},            boss = false, island = "JungleIsland",    pos = Vector3.new(-1224.4, 9.4, 32.6)},
-    {id = "010", lvl = 70,  mobs = {"King Monkey"},              boss = true,  island = "JungleIsland",    pos = Vector3.new(-1158.0, 9.2, -14.8)},
-    {id = "011", lvl = 75,  mobs = {"Red Brawler"},              boss = false, island = "WestIsland",      pos = Vector3.new(785.6, 3.1, 2682.9)},
-    {id = "013", lvl = 90,  mobs = {"Robot"},                    boss = false, island = "WestIsland",      pos = Vector3.new(379.2, 3.2, 3183.6)},
-    {id = "014", lvl = 105, mobs = {"Robot King"},               boss = true,  island = "WestIsland",      pos = Vector3.new(379.2, 3.2, 3266.6)},
-    {id = "016", lvl = 115, mobs = {"Robot 15", "Robot 16"},     boss = true,  island = "WestIsland",      pos = Vector3.new(1309.8, 2.8, 3566.8)},
-    {id = "017", lvl = 120, mobs = {"Crimson King"},             boss = true,  island = "WestIsland",      pos = Vector3.new(240.7, 2.8, 3515.5)},
-    {id = "019", lvl = 130, mobs = {"Frieza"},                   boss = true,  island = "WestIsland",      pos = Vector3.new(1103.1, 2.9, 2762.2)},
-    {id = "020", lvl = 135, mobs = {"Corrupted Player"},         boss = false, island = "OnlineIsland",    pos = Vector3.new(3697.9, 30.6, 2578.0)},
-    {id = "021", lvl = 150, mobs = {"Pro Player"},               boss = false, island = "OnlineIsland",    pos = Vector3.new(3335.0, 30.6, 2777.0)},
-    {id = "024", lvl = 165, mobs = {"Jujutsu Student"},          boss = false, island = "SorcerersIsland", pos = Vector3.new(4154.9, 6.8, 44.7)},
-    {id = "026", lvl = 190, mobs = {"Special Student"},          boss = false, island = "SorcerersIsland", pos = Vector3.new(4504.3, 6.8, -14.4)},
-    {id = "027", lvl = 205, mobs = {"Overtime Sorcerer"},        boss = true,  island = "SorcerersIsland", pos = Vector3.new(4687.0, 6.9, -79.7)},
-    {id = "029", lvl = 225, mobs = {"White Panda"},              boss = true,  island = "SorcerersIsland", pos = Vector3.new(4603.3, 6.8, 205.7)},
+    {id = "001", lvl = 0,   mobs = {"Bandit"},                                   boss = false, island = "Foosha",          pos = Vector3.new(440.9, 8.3, -991.5)},
+    {id = "003", lvl = 20,  mobs = {"Higaro’s bandit", "Higaro’s Right arm"},    boss = false, island = "Foosha",          pos = Vector3.new(13.7, 7.9, -1142.1)},
+    {id = "006", lvl = 40,  mobs = {"Higaro"},                                   boss = true,  island = "Foosha",          pos = Vector3.new(235.6, 7.9, -1442.3)},
+    {id = "007", lvl = 45,  mobs = {"Warrior Monkey"},                           boss = false, island = "JungleIsland",    pos = Vector3.new(-905.7, 9.2, 104.0)},
+    {id = "009", lvl = 60,  mobs = {"Knight Monkey"},                            boss = false, island = "JungleIsland",    pos = Vector3.new(-1224.4, 9.4, 32.6)},
+    {id = "010", lvl = 70,  mobs = {"King Monkey"},                              boss = true,  island = "JungleIsland",    pos = Vector3.new(-1158.0, 9.2, -14.8)},
+    {id = "011", lvl = 75,  mobs = {"Red Brawler"},                              boss = false, island = "WestIsland",      pos = Vector3.new(785.6, 3.1, 2682.9)},
+    {id = "013", lvl = 90,  mobs = {"Robot"},                                    boss = false, island = "WestIsland",      pos = Vector3.new(379.2, 3.2, 3183.6)},
 }
 
 local QuestById = {}
@@ -399,24 +389,17 @@ local function findAliveMobForList(mobNames)
 end
 
 local function getBestQuestForLevel(level)
-    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
     for i = #CombatQuests, 1, -1 do
         local q = CombatQuests[i]
         if level >= q.lvl then
-            local mob = findAliveMobForList(q.mobs)
-            if mob then
+            if q.boss then
+                local bMob = findAliveMobForList(q.mobs)
+                if bMob then
+                    return q
+                end
+            else
                 return q
             end
-            -- Se ainda estamos longe da ilha dessa quest (não renderizou os mobs), vai até lá primeiro
-            if not q.boss and hrp and (hrp.Position - q.pos).Magnitude > 220 then
-                return q
-            end
-        end
-    end
-    for i = #CombatQuests, 1, -1 do
-        local q = CombatQuests[i]
-        if level >= q.lvl and not q.boss then
-            return q
         end
     end
     return CombatQuests[1]
@@ -1385,9 +1368,10 @@ task.spawn(function()
                     currentFarmState = matTarget.reason .. " (Aguardando Respawn)"
                 end
 
-            -- 13. COMBAT AUTO-FARM (LEVEL 0 -> 84 & MOBS/BOSSES)
+            -- 13. COMBAT AUTO-FARM PROGRESSIVO (LEVEL 0 -> 99 COM TROCA DE ILHAS GARANTIDA)
             elseif cfg.AutoFarmCombat then
                 local targetQuest = getBestQuestForLevel(level)
+                local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 
                 if LocalPlayer:GetAttribute("RepeatQuestUi") and questId == "None" then
                     safeFireRemote(QuestRemote, "Repeat")
@@ -1395,19 +1379,24 @@ task.spawn(function()
                     questId = ps.Quest.QuestId.Value
                 end
 
-                if questId ~= "None" and questId ~= targetQuest.id and os.clock() - lastQuestFire > 1.0 then
-                    lastQuestFire = os.clock()
+                if questId ~= "None" and questId ~= targetQuest.id then
                     safeFireRemote(QuestRemote, "Quit")
-                    questId = ps.Quest.QuestId.Value
+                    questId = "None"
+                    if hrp and (hrp.Position - targetQuest.pos).Magnitude > 150 then
+                        hrp.CFrame = CFrame.new(targetQuest.pos + Vector3.new(0, 15, 0))
+                    end
                 end
 
-                if questId == "None" and os.clock() - lastQuestFire > 0.8 then
+                if questId == "None" and os.clock() - lastQuestFire > 0.6 then
                     lastQuestFire = os.clock()
                     safeFireRemote(DialogueRemote, {"Quest", targetQuest.id})
                     questId = ps.Quest.QuestId.Value
+                    if hrp and (hrp.Position - targetQuest.pos).Magnitude > 150 then
+                        hrp.CFrame = CFrame.new(targetQuest.pos + Vector3.new(0, 15, 0))
+                    end
                 end
 
-                local activeQuestObj = QuestById[questId] or targetQuest
+                local activeQuestObj = targetQuest
                 local mob = findAliveMobForList(activeQuestObj.mobs)
 
                 if mob then
@@ -1415,7 +1404,6 @@ task.spawn(function()
                     local mhum = mob:FindFirstChildOfClass("Humanoid")
                     if not mhrp then
                         currentTargetPart = nil
-                        local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
                         if hrp then hrp.CFrame = CFrame.new(mob:GetPivot().Position + Vector3.new(0, 12, 0)) end
                         currentFarmState = "Carregando ilha (" .. activeQuestObj.island .. ")..."
                     else
@@ -1430,8 +1418,7 @@ task.spawn(function()
                     end
                 else
                     currentTargetPart = nil
-                    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                    if hrp and (hrp.Position - activeQuestObj.pos).Magnitude > 50 then
+                    if hrp and (hrp.Position - activeQuestObj.pos).Magnitude > 80 then
                         hrp.CFrame = CFrame.new(activeQuestObj.pos + Vector3.new(0, 10, 0))
                     end
                     currentFarmState = "Aguardando respawn: " .. table.concat(activeQuestObj.mobs, "/")
