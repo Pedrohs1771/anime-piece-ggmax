@@ -1,7 +1,7 @@
 -- ====================================================================
--- 🍎 ENI AUTO HOP FRUIT v7.0 - ANIME PIECE (GGMAX FRUIT SNIPER)
--- Pega Frutas no Mapa + Gira no Luzefe + Compra Mítica na Loja
--- Guarda tudo no Storage + Envia Webhook Discord + Server Hop Automático
+-- 🍎 ENI AUTO HOP FRUIT v8.0 - ANIME PIECE (GGMAX FRUIT SNIPER)
+-- Pega Frutas no Mapa (BasePart Handle / Model) + Gira no Luzefe (5.8s Roll)
+-- Compra Mítica na Loja + Guarda tudo no Storage + Auto Farm Money p/ Giro
 -- ====================================================================
 
 repeat task.wait() until game:IsLoaded() and game:GetService("Players").LocalPlayer
@@ -120,7 +120,7 @@ Title.BackgroundTransparency = 1
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 13
 Title.TextColor3 = Color3.fromRGB(255, 195, 40)
-Title.Text = "🍎 ENI AUTO HOP FRUIT v7.0 (GGMAX)"
+Title.Text = "🍎 ENI AUTO HOP FRUIT v8.0 (GGMAX)"
 Title.Parent = Frame
 
 local Status = Instance.new("TextLabel")
@@ -155,12 +155,15 @@ local function storeAllBackpackFruits()
     local hum = char and char:FindFirstChildOfClass("Humanoid")
     if not hum then return end
 
+    local renv = getrenv and getrenv() or _G
+    local gd = (renv._G and renv._G.GameData) or _G.GameData
+    local itemsData = gd and gd["Items Data"]
+
     for _, tool in ipairs(LocalPlayer.Backpack:GetChildren()) do
-        if tool:IsA("Tool") and string.find(tool.Name, "Fruit") then
+        if tool:IsA("Tool") and ((itemsData and itemsData[tool.Name] and itemsData[tool.Name].Category == "Fruits") or string.find(tool.Name, "Fruit")) then
             Status.Text = "📦 Guardando no Storage: " .. tool.Name
             hum:EquipTool(tool)
             task.wait(0.25)
-            pcall(function() PhysicalFruitsRemote:FireServer("Store") end)
             pcall(function() PhysicalFruitsRemote:FireServer("Storage", tool.Name) end)
             sendFruitWebhook("🍎 Fruta Coletada & Guardada!", tool.Name)
             task.wait(0.35)
@@ -192,7 +195,7 @@ task.spawn(function()
     local ps = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("PlayerStats"):WaitForChild(LocalPlayer.Name)
 
     while getgenv().ENI_FruitHopConfig.Enabled do
-        -- 1. Procura frutas dropadas/spawnadas no mapa
+        -- 1. Procura frutas dropadas/spawnadas no mapa (suporta BasePart 'Handle' direto e Model/Tool)
         local droppedFolder = Workspace:FindFirstChild("World")
             and Workspace.World:FindFirstChild("Playability")
             and Workspace.World.Playability:FindFirstChild("DroppedTools")
@@ -200,7 +203,9 @@ task.spawn(function()
         if droppedFolder then
             for _, drop in ipairs(droppedFolder:GetChildren()) do
                 if not getgenv().ENI_FruitHopConfig.Enabled then break end
-                local handle = drop:FindFirstChild("Handle") or drop:FindFirstChildWhichIsA("BasePart")
+                local handle = (drop:IsA("BasePart") and drop)
+                    or drop:FindFirstChild("Handle")
+                    or drop:FindFirstChildWhichIsA("BasePart", true)
                 local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
                 if handle and hrp then
                     Status.Text = "🧲 Pegando fruta no mapa: " .. drop.Name
@@ -209,20 +214,61 @@ task.spawn(function()
                         pcall(firetouchinterest, hrp, handle, 0)
                         pcall(firetouchinterest, hrp, handle, 1)
                     end
+                    if fireproximityprompt then
+                        local prompt = drop:FindFirstChildWhichIsA("ProximityPrompt", true)
+                        if prompt then pcall(fireproximityprompt, prompt) end
+                    end
                     task.wait(0.35)
                     storeAllBackpackFruits()
                 end
             end
         end
 
-        -- 2. Gira fruta no Luzefe se disponível
+        -- 2. Gira fruta no Luzefe (Foosha: 250.28, 10.5, -1201.5) se sem cooldown
         if getgenv().ENI_FruitHopConfig.SpinFruitBeforeHop then
             local cd = ps.Infos:FindFirstChild("LastFruitTimeSpin")
-            if ps.Infos.Level.Value >= 50 and ps.Infos.Money.Value >= 35000 and (not cd or cd.Value <= 0) then
-                Status.Text = "🎰 Girando fruta no Luzefe..."
-                DialogueRemote:FireServer({"SpinFruit", ""})
-                task.wait(1.0)
-                storeAllBackpackFruits()
+            local lvl = ps.Infos.Level.Value
+            local reqMoney = math.max(540, (lvl - 49) * 540)
+            if lvl >= 50 and (not cd or cd.Value <= 0) then
+                -- Se faltar dinheiro e for lvl >= 85, farma o valor rapidinho no ElementsQuest antes de girar!
+                if ps.Infos.Money.Value < reqMoney and lvl >= 85 then
+                    local QuestRemote = Remotes:FindFirstChild("Quest Event")
+                    while getgenv().ENI_FruitHopConfig.Enabled and ps.Infos.Money.Value < reqMoney do
+                        Status.Text = string.format("💰 Farmando $ p/ Giro (%d / %d)...", ps.Infos.Money.Value, reqMoney)
+                        local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                        if hrp and (hrp.Position - Vector3.new(660.7, 5, 2687.1)).Magnitude > 250 then
+                            hrp.CFrame = CFrame.new(660.7, 5, 2687.1)
+                        end
+                        if QuestRemote and ps.Quest.QuestId.Value ~= "None" and ps.Quest.QuestId.Value ~= "ElementsQuest" then
+                            QuestRemote:FireServer("Quit")
+                            task.wait(0.06)
+                        end
+                        DialogueRemote:FireServer({"Quest", "ElementsQuest"})
+                        task.wait(0.06)
+                        for _, el in ipairs({"Blue Element", "Red Element", "Pink Element", "Yellow Element"}) do
+                            DialogueRemote:FireServer({"ElementsQuest", el})
+                            task.wait(0.06)
+                        end
+                    end
+                end
+                if ps.Infos.Money.Value >= reqMoney then
+                    local luzefeCFrame = CFrame.new(250.28, 10.5, -1201.5)
+                    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    if hrp then
+                        Status.Text = "🎰 Teleportando ao Luzefe e girando (5.8s)..."
+                        hrp.CFrame = luzefeCFrame
+                        task.wait(0.65)
+                        DialogueRemote:FireServer({"SpinFruit", ""})
+                        local t0 = os.clock()
+                        while os.clock() - t0 < 5.8 do
+                            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                                LocalPlayer.Character.HumanoidRootPart.CFrame = luzefeCFrame
+                            end
+                            task.wait(0.2)
+                        end
+                        storeAllBackpackFruits()
+                    end
+                end
             end
         end
 

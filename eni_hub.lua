@@ -1,7 +1,7 @@
 -- ====================================================================
--- ⚡ ENI HUB v7.0 - ANIME PIECE (GGMAX FINAL PRO SUITE)
--- HUD Completa com Abas | Turbo Farm Anti-Kick | Seletor de Itens
--- Auto Hop Fruit | Auto Rejoin Autônomo | Discord Webhook GGMAX
+-- ⚡ ENI HUB v8.0 - ANIME PIECE (GGMAX FINAL PRO SUITE)
+-- HUD Completa com Abas | Turbo Farm 0->245 + $1M | Seletor de Itens
+-- Auto Hop Fruit | Auto Spin Luzefe | Auto Rejoin Autônomo | Webhook
 -- Desenvolvido por ENI para o Tris ⚡
 -- ====================================================================
 
@@ -548,15 +548,30 @@ local function runSelectiveUnlocks()
         if not ps then return end
 
         if SettingsRemote then
-            for _, code in ipairs({"4kCCU", "200kVisits!", "AllGamePass"}) do
+            for _, code in ipairs({"400kVisits!", "4kCCU", "200kVisits!", "AllGamePass"}) do
                 safeFireRemote(SettingsRemote, "UseCode", code)
+                task.wait(0.35)
             end
         end
 
+        if hasInventoryItem("Wood Log", "Miscellaneous", 1) then
+            safeFireRemote(DialogueRemote, {"Sell Woods", ""})
+            task.wait(0.35)
+        end
+
         if cfg.GrabShopSwords then
-            for _, s in ipairs({"Katana", "Future Sword", "Iron Spear", "Raven Axe"}) do
+            for _, s in ipairs({"Katana", "Iron Spear", "Future Sword", "Raven Axe"}) do
                 if not hasInventoryItem(s, "Swords", 1) then
                     safeFireRemote(ItemBuyerRemote, s)
+                    task.wait(0.45)
+                end
+            end
+            -- Auto-equipa a espada mais forte da loja disponível no inventário
+            for _, bestSword in ipairs({"Raven Axe", "Future Sword", "Iron Spear", "Katana"}) do
+                if hasInventoryItem(bestSword, "Swords", 1) and ps.Build.ActualSword.Value ~= bestSword then
+                    safeFireRemote(InventoryRemote, "Equip", bestSword)
+                    task.wait(0.35)
+                    break
                 end
             end
         end
@@ -569,15 +584,18 @@ local function runSelectiveUnlocks()
             }) do
                 if not hasInventoryItem(t, "Items", 1) then
                     safeFireRemote(ItemBuyerRemote, t)
+                    task.wait(0.45)
                 end
             end
             safeFireRemote(DialogueRemote, {"Navigation License", "Buyed"})
+            task.wait(0.35)
         end
 
         if cfg.GrabAccessories then
             for _, a in ipairs({"Scouter", "Male Uniform", "Female Uniform", "Basic Dark Cloak"}) do
                 if not hasInventoryItem(a, "Acessories", 1) then
                     safeFireRemote(ItemBuyerRemote, a)
+                    task.wait(0.45)
                 end
             end
         end
@@ -608,10 +626,69 @@ local function runSelectiveUnlocks()
             local topRaces = {Infernal = true, Curse = true, Fighter = true, Gamer = true}
             while ps.Stats.RaceRerollPoints.Value > 0 and not topRaces[ps.Build.ActualRace.Value] do
                 safeFireRemote(RaceRemote, "Spin Race")
-                task.wait(0.35)
+                task.wait(3.2)
             end
         end
     end)
+end
+
+-- Gira fruta no Luzefe (Foosha Island: 250.28, 10.5, -1201.5), aguarda os 5s da roleta e guarda no Storage
+local isSpinningFruit = false
+local function spinAndStoreFruitAtLuzefe()
+    if isSpinningFruit then return false end
+    local ps = getPlayerStatsFolder()
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if not (ps and hrp and hum) then return false end
+
+    local level = ps.Infos.Level.Value
+    local money = ps.Infos.Money.Value
+    local spinCd = ps.Infos:FindFirstChild("LastFruitTimeSpin")
+    local reqMoney = math.max(540, (level - 49) * 540)
+    if level < 50 or (spinCd and spinCd.Value > 0) or money < reqMoney then
+        return false
+    end
+
+    isSpinningFruit = true
+    local prevCFrame = hrp.CFrame
+    local luzefeCFrame = CFrame.new(250.28, 10.5, -1201.5)
+
+    pcall(function()
+        hrp.CFrame = luzefeCFrame
+        task.wait(0.65)
+        safeFireRemote(DialogueRemote, {"SpinFruit", ""})
+        local t0 = os.clock()
+        while os.clock() - t0 < 5.8 do
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                LocalPlayer.Character.HumanoidRootPart.CFrame = luzefeCFrame
+            end
+            task.wait(0.2)
+        end
+        -- Guarda qualquer fruta recebida na mochila
+        local gd = getGameData()
+        local itemsData = gd and gd["Items Data"]
+        for _, tool in ipairs(LocalPlayer.Backpack:GetChildren()) do
+            if tool:IsA("Tool") and ((itemsData and itemsData[tool.Name] and itemsData[tool.Name].Category == "Fruits") or string.find(tool.Name, "Fruit")) then
+                if LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
+                    LocalPlayer.Character.Humanoid:EquipTool(tool)
+                    task.wait(0.25)
+                    safeFireRemote(PhysicalFruitsRemote, "Storage", tool.Name)
+                    if getgenv().ENI_Config.WebhookUrl ~= "" then
+                        task.spawn(function()
+                            sendGGMAXWebhook("🎰 Fruta Girada & Guardada no Storage: " .. tool.Name)
+                        end)
+                    end
+                end
+            end
+        end
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            LocalPlayer.Character.HumanoidRootPart.CFrame = prevCFrame
+        end
+    end)
+
+    isSpinningFruit = false
+    return true
 end
 
 -- ====================================================================
@@ -631,7 +708,7 @@ ToggleBtn.BackgroundColor3 = Color3.fromRGB(20, 16, 36)
 ToggleBtn.TextColor3 = Color3.fromRGB(0, 240, 255)
 ToggleBtn.Font = Enum.Font.GothamBold
 ToggleBtn.TextSize = 13
-ToggleBtn.Text = "⚡ ENI HUB v6"
+ToggleBtn.Text = "⚡ ENI HUB v8"
 ToggleBtn.Parent = ScreenGui
 Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(0, 8)
 local ToggleStroke = Instance.new("UIStroke", ToggleBtn)
@@ -661,7 +738,7 @@ local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(1, -60, 1, 0)
 TitleLabel.Position = UDim2.new(0, 14, 0, 0)
 TitleLabel.BackgroundTransparency = 1
-TitleLabel.Text = "⚡ ENI HUB v6.0 — Anime Piece (GGMAX Pro Suite)"
+TitleLabel.Text = "⚡ ENI HUB v8.0 — Anime Piece (GGMAX Pro Suite)"
 TitleLabel.TextColor3 = Color3.fromRGB(240, 240, 255)
 TitleLabel.Font = Enum.Font.GothamBold
 TitleLabel.TextSize = 14
@@ -862,7 +939,7 @@ addToggle(PageItems, "Girar Raça Top (Infernal/Curse)", "AutoSpinTopRace")
 addAction(PageItems, "⚡ Executar Compras Selecionadas", runSelectiveUnlocks)
 addAction(PageItems, "🎁 Resgatar Todos os Códigos", function()
     if SettingsRemote then
-        for _, c in ipairs({"4kCCU", "200kVisits!", "AllGamePass"}) do
+        for _, c in ipairs({"400kVisits!", "4kCCU", "200kVisits!", "AllGamePass"}) do
             safeFireRemote(SettingsRemote, "UseCode", c)
         end
     end
@@ -871,11 +948,13 @@ end)
 -- Populando Aba 3: Frutas & Hop
 addToggle(PageFruits, "🧲 Auto Pegar Frutas Mapa", "AutoGrabDrops")
 addToggle(PageFruits, "📦 Auto Guardar no Storage", "AutoStoreFruits")
-addToggle(PageFruits, "🎰 Auto Girar Fruta ($35k)", "AutoSpinFruit")
+addToggle(PageFruits, "🎰 Auto Girar Fruta (Luzefe)", "AutoSpinFruit")
 addToggle(PageFruits, "🛒 Auto Comprar Mítica Loja", "AutoBuyMythicStock")
 addToggle(PageFruits, "🌐 Auto Server Hop Fruit", "AutoHopFruit")
-addAction(PageFruits, "🎰 Girar Fruta Agora ($)", function()
-    safeFireRemote(DialogueRemote, {"SpinFruit", ""})
+addAction(PageFruits, "🎰 Girar Fruta Agora (TP Luzefe)", function()
+    currentTargetPart = nil
+    currentFarmState = "🎰 Girando Fruta no Luzefe (5.8s)..."
+    spinAndStoreFruitAtLuzefe()
 end)
 addAction(PageFruits, "🌐 Pular de Servidor Agora", serverHop)
 
@@ -1003,7 +1082,7 @@ task.spawn(function()
                 end
             end
 
-            -- 4. AUTO-PEGAR FRUTAS NO MAPA
+            -- 4. AUTO-PEGAR FRUTAS NO MAPA (SUPORTA BASEPART 'HANDLE' DIRETO E MODEL/TOOL)
             local foundMapFruit = false
             if cfg.AutoGrabDrops then
                 local droppedFolder = Workspace:FindFirstChild("World")
@@ -1011,17 +1090,24 @@ task.spawn(function()
                     and Workspace.World.Playability:FindFirstChild("DroppedTools")
                 if droppedFolder then
                     for _, drop in ipairs(droppedFolder:GetChildren()) do
-                        local handle = drop:FindFirstChild("Handle") or drop:FindFirstChildWhichIsA("BasePart")
+                        local handle = (drop:IsA("BasePart") and drop)
+                            or drop:FindFirstChild("Handle")
+                            or drop:FindFirstChildWhichIsA("BasePart", true)
                         local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
                         if handle and hrp then
                             foundMapFruit = true
+                            currentTargetPart = nil
                             currentFarmState = "🍎 Coletando Fruta no Mapa: " .. drop.Name
                             hrp.CFrame = handle.CFrame
                             if firetouchinterest then
                                 pcall(firetouchinterest, hrp, handle, 0)
                                 pcall(firetouchinterest, hrp, handle, 1)
                             end
-                            task.wait(0.2)
+                            if fireproximityprompt then
+                                local prompt = drop:FindFirstChildWhichIsA("ProximityPrompt", true)
+                                if prompt then pcall(fireproximityprompt, prompt) end
+                            end
+                            task.wait(0.25)
                         end
                     end
                 end
@@ -1031,9 +1117,9 @@ task.spawn(function()
             if cfg.AutoStoreFruits then
                 local gd = getGameData()
                 local itemsData = gd and gd["Items Data"]
-                if itemsData and LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
+                if LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
                     for _, tool in ipairs(LocalPlayer.Backpack:GetChildren()) do
-                        if tool:IsA("Tool") and itemsData[tool.Name] and itemsData[tool.Name].Category == "Fruits" then
+                        if tool:IsA("Tool") and ((itemsData and itemsData[tool.Name] and itemsData[tool.Name].Category == "Fruits") or string.find(tool.Name, "Fruit")) then
                             LocalPlayer.Character.Humanoid:EquipTool(tool)
                             task.wait(0.25)
                             safeFireRemote(PhysicalFruitsRemote, "Storage", tool.Name)
@@ -1047,12 +1133,15 @@ task.spawn(function()
                 end
             end
 
-            -- 6. AUTO-GIRAR FRUTA (LUZEFE)
+            -- 6. AUTO-GIRAR FRUTA (LUZEFE COM TELEPORTE + 5.8s ROLL + AUTO-STORAGE)
             if cfg.AutoSpinFruit and level >= 50 and os.clock() - lastGachaTry > 20 then
                 local spinCd = ps.Infos:FindFirstChild("LastFruitTimeSpin")
-                if (not spinCd or spinCd.Value <= 0) and money >= 35000 then
+                local reqMoney = math.max(540, (level - 49) * 540)
+                if (not spinCd or spinCd.Value <= 0) and money >= reqMoney then
                     lastGachaTry = os.clock()
-                    safeFireRemote(DialogueRemote, {"SpinFruit", ""})
+                    currentTargetPart = nil
+                    currentFarmState = "🎰 Girando Fruta no Luzefe (5.8s)..."
+                    spinAndStoreFruitAtLuzefe()
                 end
             end
 
@@ -1106,9 +1195,142 @@ task.spawn(function()
                 end
             end
 
-            -- 11. PRIORIDADE DE MATERIAIS ESPECÍFICOS (SOULS / GEARS / MAGIC BALL)
+            -- 11. TURBO TASK FARM MULTI-TIER 100% ANTI-KICK (LEVEL 35 -> 245 MAX + DINHEIRO INFINITO ATÉ $1M)
             local matTarget = getPriorityMaterialTarget()
-            if matTarget and cfg.AutoFarmCombat then
+            local needMoney = (money < math.min(1000000, math.max(cfg.TargetMoneyGGMAX or 500000, 350000)))
+            if cfg.TurboTaskFarm and level >= 35 and (level < 245 or needMoney or not matTarget) then
+                currentTargetPart = nil
+                local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+
+                -- TIER 4: LEVEL 200 -> 244 => QUEST 028 (Heal Sorcerers Event: +144,380 EXP a cada 3.5s!)
+                if level >= 200 and level < 245 then
+                    local healRemote = SpecialsFolder and SpecialsFolder:FindFirstChild("Heal Sorcerers Event")
+                    local ptsFolder = Workspace:FindFirstChild("World")
+                        and Workspace.World:FindFirstChild("Islands")
+                        and Workspace.World.Islands:FindFirstChild("Sorcerers-Island")
+                        and Workspace.World.Islands["Sorcerers-Island"]:FindFirstChild("Heal Sorcerers Quest")
+                        and Workspace.World.Islands["Sorcerers-Island"]["Heal Sorcerers Quest"]:FindFirstChild("Points")
+                    local pts = ptsFolder and ptsFolder:GetChildren() or {}
+                    currentFarmState = string.format("⚡ ULTRA XP [Quest 028 Heal Sorcerers] Lvl %d -> 245 (+144.3k XP/3.5s)", level)
+                    if questId ~= "028" and questId ~= "None" then
+                        safeFireRemote(QuestRemote, "Quit")
+                        task.wait(0.15)
+                    end
+                    if hrp then
+                        if #pts >= 3 then
+                            hrp.CFrame = pts[1].CFrame + Vector3.new(0, 2, 0)
+                        else
+                            hrp.CFrame = CFrame.new(4509.2, 9.0, 337.5)
+                        end
+                    end
+                    if ps.Quest.QuestId.Value == "None" then
+                        safeFireRemote(DialogueRemote, {"Quest", "028"})
+                        task.wait(0.2)
+                    end
+                    if healRemote and hrp and #pts >= 3 then
+                        for i = 1, 3 do
+                            if getgenv().ENI_HubId ~= HubId or not getgenv().ENI_Config.TurboTaskFarm or ps.Infos.Level.Value >= 245 then break end
+                            hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                            if hrp then hrp.CFrame = pts[i].CFrame + Vector3.new(0, 2, 0) end
+                            task.wait(1.1)
+                            pcall(healRemote.FireServer, healRemote, "AjudarOsCaras")
+                        end
+                    end
+
+                -- TIER 3: LEVEL 165 -> 199 => QUEST 025 (Cursed Dolls Event: +36,938 EXP a cada 5.2s!)
+                elseif level >= 165 and level < 200 and money >= 250000 then
+                    local dollsRemote = SpecialsFolder and SpecialsFolder:FindFirstChild("Cursed Dolls Event")
+                    local ptsFolder = Workspace:FindFirstChild("World")
+                        and Workspace.World:FindFirstChild("Islands")
+                        and Workspace.World.Islands:FindFirstChild("Sorcerers-Island")
+                        and Workspace.World.Islands["Sorcerers-Island"]:FindFirstChild("Curse Dools Quest")
+                        and Workspace.World.Islands["Sorcerers-Island"]["Curse Dools Quest"]:FindFirstChild("Points")
+                    local pts = ptsFolder and ptsFolder:GetChildren() or {}
+                    currentFarmState = string.format("⚡ TURBO XP [Quest 025 Cursed Dolls] Lvl %d -> 200 (+36.9k XP/5s)", level)
+                    if questId ~= "025" and questId ~= "None" then
+                        safeFireRemote(QuestRemote, "Quit")
+                        task.wait(0.15)
+                    end
+                    if hrp then
+                        if #pts >= 5 then
+                            hrp.CFrame = pts[1].CFrame + Vector3.new(0, 2, 0)
+                        else
+                            hrp.CFrame = CFrame.new(4239.4, 9.5, 116.1)
+                        end
+                    end
+                    if ps.Quest.QuestId.Value == "None" then
+                        safeFireRemote(DialogueRemote, {"Quest", "025"})
+                        task.wait(0.2)
+                    end
+                    if dollsRemote and hrp and #pts >= 5 then
+                        for i = 1, 5 do
+                            if getgenv().ENI_HubId ~= HubId or not getgenv().ENI_Config.TurboTaskFarm or ps.Infos.Level.Value >= 200 then break end
+                            hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                            if hrp then hrp.CFrame = pts[i].CFrame + Vector3.new(0, 2, 0) end
+                            task.wait(1.05)
+                            pcall(dollsRemote.FireServer, dollsRemote, "CollectCurseDoll")
+                        end
+                    end
+
+                -- TIER 2 & TIER 5: LEVEL 85 -> 164 (OU FARM DE DINHEIRO INFINITO ATÉ $1,000,000) => ELEMENTS QUEST
+                elseif level >= 85 then
+                    if hrp and (hrp.Position - Vector3.new(660.7, 5, 2687.1)).Magnitude > 250 then
+                        hrp.CFrame = CFrame.new(660.7, 5, 2687.1)
+                    end
+                    if level < 245 then
+                        currentFarmState = string.format("⚡ Turbo Level & Money [ElementsQuest] Lvl %d (+2k XP / +$500)", level)
+                    else
+                        currentFarmState = string.format("💰 Money Infinito [ElementsQuest] ($%d / $1,000,000)", money)
+                    end
+                    if questId ~= "ElementsQuest" and questId ~= "None" then
+                        safeFireRemote(QuestRemote, "Quit")
+                    end
+                    if ps.Quest.QuestId.Value == "None" then
+                        safeFireRemote(DialogueRemote, {"Quest", "ElementsQuest"})
+                    end
+                    for _, el in ipairs({"Blue Element", "Red Element", "Pink Element", "Yellow Element"}) do
+                        if getgenv().ENI_HubId ~= HubId or not getgenv().ENI_Config.TurboTaskFarm then break end
+                        safeFireRemote(DialogueRemote, {"ElementsQuest", el})
+                    end
+
+                -- TIER 1: LEVEL 35 -> 84 => QUEST 008 (Coletar Banana Event: +4,925 EXP sem precisar matar mobs!)
+                elseif level >= 35 and level < 85 then
+                    local bananaRemote = SpecialsFolder and SpecialsFolder:FindFirstChild("Coletar Banana Event")
+                    local ptsFolder = Workspace:FindFirstChild("World")
+                        and Workspace.World:FindFirstChild("Islands")
+                        and Workspace.World.Islands:FindFirstChild("Jungles-Island")
+                        and Workspace.World.Islands["Jungles-Island"]:FindFirstChild("Coletar Banana Quest")
+                        and Workspace.World.Islands["Jungles-Island"]["Coletar Banana Quest"]:FindFirstChild("Points")
+                    local pts = ptsFolder and ptsFolder:GetChildren() or {}
+                    currentFarmState = string.format("🍌 Fast Level [Quest 008 Bananas] Lvl %d -> 85 (+4.9k XP)", level)
+                    if questId ~= "008" and questId ~= "None" then
+                        safeFireRemote(QuestRemote, "Quit")
+                        task.wait(0.15)
+                    end
+                    if hrp then
+                        if #pts >= 6 then
+                            hrp.CFrame = pts[1].CFrame + Vector3.new(0, 2, 0)
+                        else
+                            hrp.CFrame = CFrame.new(-905.7, 12.0, 104.0)
+                        end
+                    end
+                    if ps.Quest.QuestId.Value == "None" then
+                        safeFireRemote(DialogueRemote, {"Quest", "008"})
+                        task.wait(0.2)
+                    end
+                    if bananaRemote and hrp and #pts >= 6 then
+                        for i = 1, 6 do
+                            if getgenv().ENI_HubId ~= HubId or not getgenv().ENI_Config.TurboTaskFarm or ps.Infos.Level.Value >= 85 then break end
+                            hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                            if hrp then hrp.CFrame = pts[i].CFrame + Vector3.new(0, 2, 0) end
+                            task.wait(1.0)
+                            pcall(bananaRemote.FireServer, bananaRemote, "ColetarBanana")
+                        end
+                    end
+                end
+
+            -- 12. PRIORIDADE DE MATERIAIS ESPECÍFICOS APÓS LEVEL MAX (SOULS / GEARS / MAGIC BALL)
+            elseif matTarget and cfg.AutoFarmCombat then
                 local mob = findAliveMobForList(matTarget.mobs)
                 if mob then
                     local mhrp = mob:FindFirstChild("HumanoidRootPart")
@@ -1135,84 +1357,7 @@ task.spawn(function()
                     currentFarmState = matTarget.reason .. " (Aguardando Respawn)"
                 end
 
-            -- 12. TURBO SPEED LEVEL FARM (MULTI-FASE: 0->84 COMBAT, 85->179 ELEMENTS, 180->245 DOLLS & BOSSES)
-            elseif cfg.TurboTaskFarm and level >= 85 then
-                if level < 180 then
-                    -- Nível 85 a 179: ElementsQuest instantâneo via Dialogue Event (+2k XP / +$500)
-                    currentTargetPart = nil
-                    currentFarmState = "⚡ Turbo Task [ElementsQuest] (+2k XP / +$500)"
-                    if questId ~= "ElementsQuest" and questId ~= "None" then
-                        safeFireRemote(QuestRemote, "Quit")
-                    end
-                    if ps.Quest.QuestId.Value == "None" then
-                        safeFireRemote(DialogueRemote, {"Quest", "ElementsQuest"})
-                    end
-                    for _, el in ipairs({"Blue Element", "Red Element", "Pink Element", "Yellow Element"}) do
-                        if getgenv().ENI_HubId ~= HubId or not getgenv().ENI_Config.TurboTaskFarm then break end
-                        safeFireRemote(DialogueRemote, {"ElementsQuest", el})
-                    end
-                elseif level < 245 then
-                    -- Nível 180 a 245: Cursed Dolls (Quest 025: +37,000 XP) + Boss Snipers (White Panda 239k XP, Overtime 142k XP)
-                    local panda = (level >= 225) and findAliveMobForList({"White Panda"})
-                    local overtime = (level >= 205) and findAliveMobForList({"Overtime Sorcerer"})
-                    local cdRemote = SpecialsFolder and SpecialsFolder:FindFirstChild("Cursed Dolls Event")
-
-                    if panda then
-                        currentFarmState = "🐼 Matando White Panda Boss (+239k XP)"
-                        if questId ~= "029" and questId ~= "None" then safeFireRemote(QuestRemote, "Quit") end
-                        if ps.Quest.QuestId.Value == "None" then safeFireRemote(DialogueRemote, {"Quest", "029"}) end
-                        local mhrp = panda:FindFirstChild("HumanoidRootPart")
-                        if mhrp then
-                            currentTargetPart = mhrp
-                            local tool = ensureWeaponEquipped()
-                            if safeFireCombat(comboHit) then comboHit = (comboHit >= 4) and 1 or (comboHit + 1) end
-                            if tool then fireWeaponSkills(tool.Name, mhrp.Position) end
-                        end
-                    elseif overtime then
-                        currentFarmState = "⌛ Matando Overtime Sorcerer Boss (+142k XP)"
-                        if questId ~= "027" and questId ~= "None" then safeFireRemote(QuestRemote, "Quit") end
-                        if ps.Quest.QuestId.Value == "None" then safeFireRemote(DialogueRemote, {"Quest", "027"}) end
-                        local mhrp = overtime:FindFirstChild("HumanoidRootPart")
-                        if mhrp then
-                            currentTargetPart = mhrp
-                            local tool = ensureWeaponEquipped()
-                            if safeFireCombat(comboHit) then comboHit = (comboHit >= 4) and 1 or (comboHit + 1) end
-                            if tool then fireWeaponSkills(tool.Name, mhrp.Position) end
-                        end
-                    else
-                        currentTargetPart = nil
-                        currentFarmState = "🎎 Coletando Cursed Dolls [Quest 025] (+37k XP)"
-                        if questId ~= "025" and questId ~= "None" then
-                            safeFireRemote(QuestRemote, "Quit")
-                            task.wait(0.35)
-                        end
-                        if ps.Quest.QuestId.Value == "None" then
-                            safeFireRemote(DialogueRemote, {"Quest", "025"})
-                            task.wait(0.35)
-                        end
-                        if cdRemote and ps.Quest.QuestId.Value == "025" then
-                            safeFireRemote(cdRemote, "CollectCurseDoll")
-                            task.wait(0.8)
-                        end
-                    end
-                else
-                    -- Level 245 (MAX LEVEL ATINGIDO!)
-                    currentTargetPart = nil
-                    currentFarmState = "👑 LEVEL 245 MÁXIMO ATINGIDO! Farmando Beli..."
-                    if questId ~= "025" and questId ~= "None" then
-                        safeFireRemote(QuestRemote, "Quit")
-                    end
-                    if ps.Quest.QuestId.Value == "None" then
-                        safeFireRemote(DialogueRemote, {"Quest", "025"})
-                    end
-                    local cdRemote = SpecialsFolder and SpecialsFolder:FindFirstChild("Cursed Dolls Event")
-                    if cdRemote and ps.Quest.QuestId.Value == "025" then
-                        safeFireRemote(cdRemote, "CollectCurseDoll")
-                        task.wait(0.8)
-                    end
-                end
-
-            -- 13. COMBAT AUTO-FARM (MOBS & BOSSES)
+            -- 13. COMBAT AUTO-FARM (LEVEL 0 -> 84 & MOBS/BOSSES)
             elseif cfg.AutoFarmCombat then
                 local targetQuest = getBestQuestForLevel(level)
 

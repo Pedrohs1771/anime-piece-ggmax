@@ -1,8 +1,8 @@
 -- ====================================================================
--- 🤖 ENI KAITAN GGMAX v7.0 - AUTO FARM LEVEL MAX + GRAB ALL + MONEY
--- Script 100% Automático (Kaitan) para Farmar Contas p/ Vender na GGMAX
--- Level 0 -> 84 (Combate) | Level 85 -> 179 (Elements) | Level 180 -> 245 Max (Dolls & Bosses)
--- Pega Espadas, Estilos, Haki, Raça Mítica, Frutas + Envia Anúncio Pronto no Webhook
+-- 🤖 ENI KAITAN GGMAX v8.0 - AUTO FARM LEVEL MAX + $1M BELI + GRAB ALL
+-- Script 100% Automático (Kaitan) para Farmar Contas do 0 ao 245 Max
+-- Level 0 -> 84 (Combate) | Level 85 -> 245 Max + $1,000,000 (ElementsQuest 0 Kick)
+-- Pega Espadas, Estilos, Haki, Raça Mítica, Frutas + Auto Rejoin + Webhook
 -- ====================================================================
 
 repeat task.wait() until game:IsLoaded() and game:GetService("Players").LocalPlayer
@@ -22,7 +22,7 @@ end
 getgenv().GGMAX_Kaitan = getgenv().GGMAX_Kaitan or {
     WebhookUrl         = "",            -- Cole seu Webhook do Discord aqui
     TargetLevel        = 245,           -- Level Máximo do jogo (245)
-    TargetMoney        = 500000,        -- Quanto de Money ($) farmar antes de notificar no Webhook
+    TargetMoney        = 1000000,       -- Dinheiro Máximo ($1,000,000 Cap) antes de notificar no Webhook
     GrabAllShopSwords  = true,          -- Katana, Future Sword, Iron Spear, Raven Axe
     GrabAllToolsPoses  = true,          -- Axe, Iron Hoe, Wrench, Pickaxe + Todas as Poses
     GrabAllAccessories = true,          -- Scouter, Uniforms, Basic Dark Cloak

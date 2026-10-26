@@ -1,5 +1,5 @@
 -- ====================================================================
--- 🗡️ ENI AUTO ITEMS & CRAFTS SELECTOR v7.0 - ANIME PIECE (GGMAX)
+-- 🗡️ ENI AUTO ITEMS & CRAFTS SELECTOR v8.0 - ANIME PIECE (GGMAX)
 -- Escolha exatamente quais Espadas, Estilos, Haki, Acessórios e Raça
 -- você quer que o script farme os materiais (Souls, Gears, Cores, etc.) e compre!
 -- ====================================================================

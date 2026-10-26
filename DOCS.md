@@ -164,23 +164,24 @@ Todos localizados em: game.ReplicatedStorage.Remotes
     - Função: Resgata códigos promocionais no servidor.
     - Argumentos: ("UseCode", codeString)
     - Códigos Funcionais:
+      "400kVisits!" (+15 Race Spins + 10m 2x Drop)
       "4kCCU"
       "200kVisits!"
       "AllGamePass"
     - Exemplo:
-      SettingsRemote:FireServer("UseCode", "4kCCU")
+      SettingsRemote:FireServer("UseCode", "400kVisits!")
 
 13. "Armament Haki Event" (RemoteEvent)
     - Função: Alterna a ativação visual e de buffs do Armament Haki no personagem.
     - Exemplo:
       HakiRemote:FireServer()
 
-14. "Specials Remotes" (Folder) -> "Cursed Dolls Event" (RemoteEvent)
-    - Função: Coleta os bonecos amaldiçoados da Quest 025 (Cursed Dolls).
-    - Argumento: "CollectCurseDoll"
-    - Exemplo:
-      cdRemote:FireServer("CollectCurseDoll")
-      -- Repita 5 vezes com delay de ~1.15s para concluir a missão (+36.938 XP).
+14. "Specials Remotes" (Folder) -> "Cursed Dolls Event" & "Heal Sorcerers Event" (RemoteEvent)
+    - Função: Coleta os objetivos das missões especiais da Sorcerers Island (COM TELEPORTE OBRIGATÓRIO ATÉ OS POINTS PARA EVITAR KICK DE PROXIMIDADE!).
+    - Quest 025 (Level 165+ com tolerância -15): "Cursed Dolls Event":FireServer("CollectCurseDoll")
+      * Teleporte a cada um dos 5 pontos em workspace.World.Islands["Sorcerers-Island"]["Curse Dools Quest"].Points com task.wait(1.05) -> +36,938 EXP!
+    - Quest 028 (Level 200+ com tolerância -15): "Heal Sorcerers Event":FireServer("AjudarOsCaras")
+      * Teleporte a cada um dos 3 pontos em workspace.World.Islands["Sorcerers-Island"]["Heal Sorcerers Quest"].Points com task.wait(1.1) -> +144,380 EXP em 3.5s!
 
 15. Outros Remotes Auxiliares:
     - "Fast Travel Event": Teleporte rápido de ilha.
@@ -209,7 +210,9 @@ Tabela de Ações Mapeadas:
 | "ElementsQuest"     | "Red Element"     | Entrega o elemento vermelho            |
 | "ElementsQuest"     | "Pink Element"    | Entrega o elemento rosa                |
 | "ElementsQuest"     | "Yellow Element"  | Entrega o elemento amarelo (conclui)   |
-| "SpinFruit"         | ""                | Gira fruta no NPC Luzefe ($35,000)     |
+| "SpinFruit"         | ""                | Gira fruta no NPC Luzefe (Requer TP em 250.28, 10.5, -1201.5 + 5.8s roll; Preço = (Level-49)*540) |
+| "Sell Woods"        | ""                | Vende todas as Wood Logs no Lumberjack ($10 cada) |
+| "Navigation License"| "Buyed"           | Compra Navigation License no Roger ($50) |
 | "Flash Step"        | "Buy"             | Compra Flash Step (requer almas + $5.5k)|
 | "Sanjiro"           | "Buy"             | Compra Black Leg Style ($15,000)       |
 | "RobotTrainer"      | "Buy"             | Compra Robotic Style (Gears + Core)    |
@@ -260,6 +263,7 @@ Coordenadas, Níveis Mínimos, Alvos e Recompensas:
 | 025 | 180 | Cursed Dolls (Task)     | BonecoDePalha      | Sorcerers(4239,9,116)| 36,938     | $1,150  |
 | 026 | 190 | Special Students        | Special Student    | Sorcerers(4504,7,-14)| 45,000     | $1,200  |
 | 027 | 205 | Overtime Sorcerer (Boss)| Overtime Sorcerer  | Sorcerers(4687,7,-80)| 142,250    | $1,800  |
+| 028 | 215 | Heal Sorcerers (Task)   | AjudarOsCaras (3x) | Sorcerers(4509,9,338)| 144,380    | $1,400  |
 | 029 | 225 | White Panda (Boss)      | White Panda        | Sorcerers(4603,7,206)| 239,353    | $2,500  |
 +-----+-----+-------------------------+--------------------+---------------------+------------+---------+
 * Nota: ElementsQuest sofre penalidade de 50% de EXP (cai para 1.013 XP) se o jogador tiver Nível > 100.
