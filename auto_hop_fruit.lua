@@ -150,25 +150,60 @@ StopBtn.MouseButton1Click:Connect(function()
     StopBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 80)
 end)
 
+local function hasStoredFruit(fruitName)
+    local renv = getrenv and getrenv() or _G
+    local inv = (renv._G and renv._G.ClientInventory) or _G.ClientInventory
+    if inv and inv.Items and inv.Items.Fruits then
+        for _, it in pairs(inv.Items.Fruits) do
+            if it.Name == fruitName and (it.Amount or 1) >= 1 then
+                return true
+            end
+        end
+    end
+    return false
+end
+
 local function storeAllBackpackFruits()
     local char = LocalPlayer.Character
     local hum = char and char:FindFirstChildOfClass("Humanoid")
-    if not hum then return end
+    if not (char and hum) then return false end
 
     local renv = getrenv and getrenv() or _G
     local gd = (renv._G and renv._G.GameData) or _G.GameData
     local itemsData = gd and gd["Items Data"]
+    local storedAny = false
 
-    for _, tool in ipairs(LocalPlayer.Backpack:GetChildren()) do
-        if tool:IsA("Tool") and ((itemsData and itemsData[tool.Name] and itemsData[tool.Name].Category == "Fruits") or string.find(tool.Name, "Fruit")) then
-            Status.Text = "📦 Guardando no Storage: " .. tool.Name
-            hum:EquipTool(tool)
-            task.wait(0.25)
-            pcall(function() PhysicalFruitsRemote:FireServer("Storage", tool.Name) end)
-            sendFruitWebhook("🍎 Fruta Coletada & Guardada!", tool.Name)
-            task.wait(0.35)
+    local candidates = {}
+    for _, t in ipairs(char:GetChildren()) do
+        if t:IsA("Tool") then table.insert(candidates, t) end
+    end
+    for _, t in ipairs(LocalPlayer.Backpack:GetChildren()) do
+        if t:IsA("Tool") then table.insert(candidates, t) end
+    end
+
+    for _, tool in ipairs(candidates) do
+        if (itemsData and itemsData[tool.Name] and itemsData[tool.Name].Category == "Fruits") or string.find(tool.Name, "Fruit") then
+            if not hasStoredFruit(tool.Name) then
+                Status.Text = "📦 Guardando no Storage: " .. tool.Name
+                if tool.Parent ~= char then
+                    hum:EquipTool(tool)
+                    local tWait = os.clock()
+                    while tool.Parent ~= char and os.clock() - tWait < 0.8 do
+                        task.wait(0.05)
+                    end
+                end
+                task.wait(0.25)
+                pcall(function() LocalPlayer:SetAttribute("ActualTool", tool.Name) end)
+                pcall(function() PhysicalFruitsRemote:FireServer("Storage", tool.Name) end)
+                task.wait(0.6)
+                storedAny = true
+                sendFruitWebhook("🍎 Fruta Coletada & Guardada!", tool.Name)
+            else
+                Status.Text = "✅ Já possui no Storage: " .. tool.Name
+            end
         end
     end
+    return storedAny
 end
 
 local function hopToNextServer()
@@ -195,7 +230,7 @@ task.spawn(function()
     local ps = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("PlayerStats"):WaitForChild(LocalPlayer.Name)
 
     while getgenv().ENI_FruitHopConfig.Enabled do
-        -- 1. Procura frutas dropadas/spawnadas no mapa (suporta BasePart 'Handle' direto e Model/Tool)
+        -- 1. Procura frutas dropadas/spawnadas no mapa (aguarda replicação de servidor até pegar 100% e guardar!)
         local droppedFolder = Workspace:FindFirstChild("World")
             and Workspace.World:FindFirstChild("Playability")
             and Workspace.World.Playability:FindFirstChild("DroppedTools")
@@ -206,18 +241,39 @@ task.spawn(function()
                 local handle = (drop:IsA("BasePart") and drop)
                     or drop:FindFirstChild("Handle")
                     or drop:FindFirstChildWhichIsA("BasePart", true)
-                local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                if handle and hrp then
-                    Status.Text = "🧲 Pegando fruta no mapa: " .. drop.Name
-                    hrp.CFrame = handle.CFrame
-                    if firetouchinterest then
-                        pcall(firetouchinterest, hrp, handle, 0)
-                        pcall(firetouchinterest, hrp, handle, 1)
+                local prompt = drop:FindFirstChildWhichIsA("ProximityPrompt", true)
+                if handle then
+                    local fLabel = (prompt and prompt.ObjectText ~= "" and prompt.ObjectText) or drop.Name
+                    Status.Text = "🧲 Pegando fruta no mapa: " .. tostring(fLabel)
+                    local t0 = os.clock()
+                    while drop and drop.Parent == droppedFolder and os.clock() - t0 < 6.0 and getgenv().ENI_FruitHopConfig.Enabled do
+                        local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                        if not hrp then break end
+                        hrp.CFrame = handle.CFrame * CFrame.new(0, 3.5, 0)
+                        hrp.AssemblyLinearVelocity = Vector3.zero
+                        task.wait(0.25)
+                        if prompt then
+                            pcall(function()
+                                prompt.HoldDuration = 0
+                                prompt.MaxActivationDistance = 30
+                                prompt.RequiresLineOfSight = false
+                                prompt.Enabled = true
+                            end)
+                            if fireproximityprompt then pcall(fireproximityprompt, prompt) end
+                            pcall(function()
+                                prompt:InputHoldBegin()
+                                task.wait(0.05)
+                                prompt:InputHoldEnd()
+                            end)
+                        end
+                        if firetouchinterest then
+                            pcall(firetouchinterest, hrp, handle, 0)
+                            pcall(firetouchinterest, hrp, handle, 1)
+                        end
+                        task.wait(0.22)
                     end
-                    if fireproximityprompt then
-                        local prompt = drop:FindFirstChildWhichIsA("ProximityPrompt", true)
-                        if prompt then pcall(fireproximityprompt, prompt) end
-                    end
+                    task.wait(0.4)
+                    storeAllBackpackFruits()
                     task.wait(0.35)
                     storeAllBackpackFruits()
                 end
@@ -230,8 +286,8 @@ task.spawn(function()
             local lvl = ps.Infos.Level.Value
             local reqMoney = math.max(540, (lvl - 49) * 540)
             if lvl >= 50 and (not cd or cd.Value <= 0) then
-                -- Se faltar dinheiro e for lvl >= 85, farma o valor rapidinho no ElementsQuest antes de girar!
-                if ps.Infos.Money.Value < reqMoney and lvl >= 85 then
+                -- Se faltar dinheiro e for lvl >= 100, farma o valor rapidinho no ElementsQuest antes de girar!
+                if ps.Infos.Money.Value < reqMoney and lvl >= 100 then
                     local QuestRemote = Remotes:FindFirstChild("Quest Event")
                     while getgenv().ENI_FruitHopConfig.Enabled and ps.Infos.Money.Value < reqMoney do
                         Status.Text = string.format("💰 Farmando $ p/ Giro (%d / %d)...", ps.Infos.Money.Value, reqMoney)

@@ -118,9 +118,8 @@ end
 
 local function safeFireCombat(comboIndex)
     local now = os.clock()
-    if now - (getgenv().ENI_LastM1Fire or 0) >= 0.28 and now - (getgenv().ENI_NextPacketTime or 0) >= 0.18 then
+    if now - (getgenv().ENI_LastM1Fire or 0) >= 0.15 then
         getgenv().ENI_LastM1Fire = now
-        getgenv().ENI_NextPacketTime = now
         pcall(CombatRemote.FireServer, CombatRemote, comboIndex)
         return true
     end
@@ -370,10 +369,15 @@ local function findAliveMobForList(mobNames)
 
     for _, model in ipairs(enemysFolder:GetChildren()) do
         if model:IsA("Model") and not model:GetAttribute("GhostBugged") then
-            local realName = model:GetAttribute("RealName") or model.Name
+            local realName = model:GetAttribute("RealName")
             local matches = false
             for _, targetName in ipairs(mobNames) do
-                if realName == targetName or string.find(model.Name, targetName, 1, true) then
+                if realName then
+                    if realName == targetName then
+                        matches = true
+                        break
+                    end
+                elseif model.Name == targetName or string.sub(model.Name, 1, #targetName + 2) == (targetName .. " [") then
                     matches = true
                     break
                 end
@@ -395,6 +399,7 @@ local function findAliveMobForList(mobNames)
 end
 
 local function getBestQuestForLevel(level)
+    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
     for i = #CombatQuests, 1, -1 do
         local q = CombatQuests[i]
         if level >= q.lvl then
@@ -402,21 +407,26 @@ local function getBestQuestForLevel(level)
             if mob then
                 return q
             end
+            -- Se ainda estamos longe da ilha dessa quest (não renderizou os mobs), vai até lá primeiro
+            if not q.boss and hrp and (hrp.Position - q.pos).Magnitude > 220 then
+                return q
+            end
         end
     end
     for i = #CombatQuests, 1, -1 do
         local q = CombatQuests[i]
-        if level >= q.lvl then
+        if level >= q.lvl and not q.boss then
             return q
         end
     end
     return CombatQuests[1]
 end
 
--- Retorna o mob específico caso o usuário tenha ativado farm de algum material que falta
+-- Retorna o mob específico APENAS após atingir o Level Max (245) para nunca atrasar o up 0 -> 245
 local function getPriorityMaterialTarget()
     local ps = getPlayerStatsFolder()
     if not ps then return nil end
+    if ps.Infos.Level.Value < 245 then return nil end
 
     -- 1. Flash Step: requer 15x Bandit Soul, 15x Higaro bandit Soul, 5x Higaro Soul
     if getgenv().ENI_Config.FarmFlashStep and not ps.Build["Flash Step"].Value then
@@ -500,11 +510,11 @@ local function ensureWeaponEquipped()
         end
     end
 
-    if currentTool and (os.clock() - lastEquipTime > 2.0 or not LocalPlayer:GetAttribute("HasAttackItem")) then
+    -- CRÍTICO: CustomToolRemote("Equip") é um TOGGLE no servidor! Só dispara se HasAttackItem for falso!
+    if currentTool and not LocalPlayer:GetAttribute("HasAttackItem") and (os.clock() - lastEquipTime > 1.5) then
         lastEquipTime = os.clock()
         LocalPlayer:SetAttribute("ActualTool", currentTool.Name)
-        LocalPlayer:SetAttribute("HasAttackItem", true)
-        safeFireRemote(CustomToolRemote, "Equip")
+        pcall(CustomToolRemote.FireServer, CustomToolRemote, "Equip")
     end
     return currentTool
 end
@@ -512,33 +522,83 @@ end
 local lastSkillCycle = 0
 local function fireWeaponSkills(toolName, targetPos)
     if not getgenv().ENI_Config.AutoSkills then return end
-    if os.clock() - lastSkillCycle < 3.0 then return end
+    if os.clock() - lastSkillCycle < 3.5 then return end
     lastSkillCycle = os.clock()
 
-    local gd = getGameData()
-    local ps = getPlayerStatsFolder()
-    if not (gd and gd["AttackableItems Data"] and ps) then return end
+    task.spawn(function()
+        local gd = getGameData()
+        local ps = getPlayerStatsFolder()
+        if not (gd and gd["AttackableItems Data"] and ps) then return end
 
-    local masteryFolder = ps:FindFirstChild("Masterys")
-    local myMastery = (masteryFolder and masteryFolder:FindFirstChild(toolName) and masteryFolder[toolName].Value) or 0
+        local masteryFolder = ps:FindFirstChild("Masterys")
+        local myMastery = (masteryFolder and masteryFolder:FindFirstChild(toolName) and masteryFolder[toolName].Value) or 0
 
-    local itemSkills = nil
-    for _, catTable in pairs(gd["AttackableItems Data"]) do
-        if typeof(catTable) == "table" and catTable[toolName] and catTable[toolName].Skills then
-            itemSkills = catTable[toolName].Skills
-            break
+        local itemSkills = nil
+        for _, catTable in pairs(gd["AttackableItems Data"]) do
+            if typeof(catTable) == "table" and catTable[toolName] and catTable[toolName].Skills then
+                itemSkills = catTable[toolName].Skills
+                break
+            end
         end
+
+        if itemSkills then
+            for skillName, skillData in pairs(itemSkills) do
+                local reqMastery = (typeof(skillData) == "table" and skillData.Mastery) or 0
+                if myMastery >= reqMastery then
+                    pcall(SkillRemote.FireServer, SkillRemote, skillName, "Hold")
+                    task.wait(0.08)
+                    pcall(SkillRemote.FireServer, SkillRemote, skillName, "Release", targetPos)
+                    task.wait(0.15)
+                end
+            end
+        end
+    end)
+end
+
+local codesRedeemedOnce = false
+local function storeAllFruitsInHub()
+    local char = LocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if not (char and hum) then return false end
+
+    local gd = getGameData()
+    local itemsData = gd and gd["Items Data"]
+    local storedAny = false
+
+    local candidates = {}
+    for _, t in ipairs(char:GetChildren()) do
+        if t:IsA("Tool") then table.insert(candidates, t) end
+    end
+    for _, t in ipairs(LocalPlayer.Backpack:GetChildren()) do
+        if t:IsA("Tool") then table.insert(candidates, t) end
     end
 
-    if itemSkills then
-        for skillName, skillData in pairs(itemSkills) do
-            local reqMastery = (typeof(skillData) == "table" and skillData.Mastery) or 0
-            if myMastery >= reqMastery then
-                safeFireRemote(SkillRemote, skillName, "Hold")
-                safeFireRemote(SkillRemote, skillName, "Release", targetPos)
+    for _, tool in ipairs(candidates) do
+        if (itemsData and itemsData[tool.Name] and itemsData[tool.Name].Category == "Fruits") or string.find(tool.Name, "Fruit") then
+            local alreadyStored = hasInventoryItem(tool.Name, "Fruits", 1)
+            if not alreadyStored then
+                if tool.Parent ~= char then
+                    hum:EquipTool(tool)
+                    local tWait = os.clock()
+                    while tool.Parent ~= char and os.clock() - tWait < 0.8 do
+                        task.wait(0.05)
+                    end
+                end
+                task.wait(0.25)
+                pcall(function() LocalPlayer:SetAttribute("ActualTool", tool.Name) end)
+                pcall(PhysicalFruitsRemote.FireServer, PhysicalFruitsRemote, "Storage", tool.Name)
+                task.wait(0.55)
+                storedAny = true
+                if getgenv().ENI_Config.WebhookUrl ~= "" then
+                    local fName = tool.Name
+                    task.spawn(function()
+                        sendGGMAXWebhook("🍎 Nova Fruta Guardada no Storage: " .. fName)
+                    end)
+                end
             end
         end
     end
+    return storedAny
 end
 
 local function runSelectiveUnlocks()
@@ -547,36 +607,42 @@ local function runSelectiveUnlocks()
         local ps = getPlayerStatsFolder()
         if not ps then return end
 
-        if SettingsRemote then
+        if SettingsRemote and not codesRedeemedOnce then
+            codesRedeemedOnce = true
             for _, code in ipairs({"400kVisits!", "4kCCU", "200kVisits!", "AllGamePass"}) do
-                safeFireRemote(SettingsRemote, "UseCode", code)
-                task.wait(0.35)
+                pcall(SettingsRemote.FireServer, SettingsRemote, "UseCode", code)
+                task.wait(0.25)
             end
         end
+
+        local money = ps.Infos.Money.Value
+        local level = ps.Infos.Level.Value
 
         if hasInventoryItem("Wood Log", "Miscellaneous", 1) then
             safeFireRemote(DialogueRemote, {"Sell Woods", ""})
-            task.wait(0.35)
+            task.wait(0.25)
         end
 
-        if cfg.GrabShopSwords then
+        -- Só executa compras em massa quando já tiver dinheiro suficiente e nível alto (para não atrasar early game)
+        if money < 1500 then return end
+
+        if cfg.GrabShopSwords and money >= 1500 then
             for _, s in ipairs({"Katana", "Iron Spear", "Future Sword", "Raven Axe"}) do
                 if not hasInventoryItem(s, "Swords", 1) then
                     safeFireRemote(ItemBuyerRemote, s)
-                    task.wait(0.45)
+                    task.wait(0.25)
                 end
             end
-            -- Auto-equipa a espada mais forte da loja disponível no inventário
             for _, bestSword in ipairs({"Raven Axe", "Future Sword", "Iron Spear", "Katana"}) do
                 if hasInventoryItem(bestSword, "Swords", 1) and ps.Build.ActualSword.Value ~= bestSword then
                     safeFireRemote(InventoryRemote, "Equip", bestSword)
-                    task.wait(0.35)
+                    task.wait(0.25)
                     break
                 end
             end
         end
 
-        if cfg.GrabToolsPoses then
+        if level >= 245 and cfg.GrabToolsPoses and money >= 25000 then
             for _, t in ipairs({
                 "Axe", "Iron Hoe", "Wrench", "Pickaxe",
                 "Starter Island Pose", "Jungle Island Pose", "West Island Pose",
@@ -584,42 +650,43 @@ local function runSelectiveUnlocks()
             }) do
                 if not hasInventoryItem(t, "Items", 1) then
                     safeFireRemote(ItemBuyerRemote, t)
-                    task.wait(0.45)
+                    task.wait(0.25)
                 end
             end
             safeFireRemote(DialogueRemote, {"Navigation License", "Buyed"})
-            task.wait(0.35)
         end
 
-        if cfg.GrabAccessories then
+        if level >= 245 and cfg.GrabAccessories and money >= 25000 then
             for _, a in ipairs({"Scouter", "Male Uniform", "Female Uniform", "Basic Dark Cloak"}) do
                 if not hasInventoryItem(a, "Acessories", 1) then
                     safeFireRemote(ItemBuyerRemote, a)
-                    task.wait(0.45)
+                    task.wait(0.25)
                 end
             end
         end
 
-        if cfg.FarmFlashStep and not ps.Build["Flash Step"].Value then
+        if cfg.FarmFlashStep and not ps.Build["Flash Step"].Value and money >= 5500 then
             safeFireRemote(DialogueRemote, {"Flash Step", "Buy"})
         end
-        if cfg.FarmBlackLeg then
+        if cfg.FarmBlackLeg and money >= 9500 and not ps.Unlockeds.FightingStyles:FindFirstChild("Black Leg") then
             safeFireRemote(DialogueRemote, {"Sanjiro", "Buy"})
         end
-        if cfg.FarmRoboticStyle then
+        if cfg.FarmRoboticStyle and money >= 15000 and not ps.Unlockeds.FightingStyles:FindFirstChild("Robotic Style") then
             safeFireRemote(DialogueRemote, {"RobotTrainer", "Buy"})
         end
-        if cfg.FarmDivergentStyle then
+        if cfg.FarmDivergentStyle and money >= 65000 and not ps.Unlockeds.FightingStyles:FindFirstChild("Divergent Style") then
             safeFireRemote(DialogueRemote, {"Jojo", "Buy"})
         end
-        if cfg.FarmShadowBlade then
+        if cfg.FarmShadowBlade and money >= 25000 and not hasInventoryItem("Shadow Blade", "Swords", 1) then
             safeFireRemote(DialogueRemote, {"Shadow Swordsman", "Buy"})
-            safeFireRemote(DialogueRemote, {"Master Blacksmith", "Buy"})
         end
-        if cfg.FarmArmamentHaki then
-            safeFireRemote(DialogueRemote, {"ArmamentHaki", "Learn"})
-            safeFireRemote(DialogueRemote, {"ArmamentHaki", "UpgradeHakiV2"})
-            safeFireRemote(DialogueRemote, {"ArmamentHaki", "UpgradeHakiV3"})
+        if cfg.FarmArmamentHaki and money >= 12500 then
+            if not ps.Build.ArmamentHaki.Value then
+                safeFireRemote(DialogueRemote, {"ArmamentHaki", "Learn"})
+            elseif ps.Build.HakiLevel.Value < 3 then
+                safeFireRemote(DialogueRemote, {"ArmamentHaki", "UpgradeHakiV2"})
+                safeFireRemote(DialogueRemote, {"ArmamentHaki", "UpgradeHakiV3"})
+            end
         end
 
         if cfg.AutoSpinTopRace and RaceRemote then
@@ -665,23 +732,7 @@ local function spinAndStoreFruitAtLuzefe()
             end
             task.wait(0.2)
         end
-        -- Guarda qualquer fruta recebida na mochila
-        local gd = getGameData()
-        local itemsData = gd and gd["Items Data"]
-        for _, tool in ipairs(LocalPlayer.Backpack:GetChildren()) do
-            if tool:IsA("Tool") and ((itemsData and itemsData[tool.Name] and itemsData[tool.Name].Category == "Fruits") or string.find(tool.Name, "Fruit")) then
-                if LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
-                    LocalPlayer.Character.Humanoid:EquipTool(tool)
-                    task.wait(0.25)
-                    safeFireRemote(PhysicalFruitsRemote, "Storage", tool.Name)
-                    if getgenv().ENI_Config.WebhookUrl ~= "" then
-                        task.spawn(function()
-                            sendGGMAXWebhook("🎰 Fruta Girada & Guardada no Storage: " .. tool.Name)
-                        end)
-                    end
-                end
-            end
-        end
+        storeAllFruitsInHub()
         if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
             LocalPlayer.Character.HumanoidRootPart.CFrame = prevCFrame
         end
@@ -1049,9 +1100,14 @@ task.spawn(function()
             local questProg = ps.Quest.Progress.Value
             local statsPoints = ps.Stats.StatsPoints.Value
 
-            -- 1. AUTO-STATS
-            if cfg.AutoStats and statsPoints >= 6 then
-                if ps.Stats.Swords.Value < 300 then
+            -- 1. AUTO-STATS INTELIGENTE (Prioriza FightStyles no início se estiver usando Melee para matar 3x mais rápido!)
+            if cfg.AutoStats and statsPoints >= 3 then
+                local usingMeleeOnly = (ps.Build.ActualSword.Value == "None" or ps.Build.ActualSword.Value == "")
+                if usingMeleeOnly and ps.Stats.FightStyles.Value < 120 then
+                    safeFireRemote(StatsRemote, "UsePoints", "FightStyles", math.min(statsPoints, 120 - ps.Stats.FightStyles.Value))
+                elseif usingMeleeOnly and ps.Stats.Defense.Value < 60 then
+                    safeFireRemote(StatsRemote, "UsePoints", "Defense", math.min(statsPoints, 60 - ps.Stats.Defense.Value))
+                elseif ps.Stats.Swords.Value < 300 then
                     safeFireRemote(StatsRemote, "UsePoints", "Swords", math.min(statsPoints, 300 - ps.Stats.Swords.Value))
                 elseif ps.Stats.Defense.Value < 300 then
                     safeFireRemote(StatsRemote, "UsePoints", "Defense", math.min(statsPoints, 300 - ps.Stats.Defense.Value))
@@ -1082,7 +1138,7 @@ task.spawn(function()
                 end
             end
 
-            -- 4. AUTO-PEGAR FRUTAS NO MAPA (SUPORTA BASEPART 'HANDLE' DIRETO E MODEL/TOOL)
+            -- 4. AUTO-PEGAR FRUTAS NO MAPA (LOOP DE REPLICAÇÃO DE SERVIDOR + AUTO-STORAGE IMEDIATO)
             local foundMapFruit = false
             if cfg.AutoGrabDrops then
                 local droppedFolder = Workspace:FindFirstChild("World")
@@ -1093,44 +1149,51 @@ task.spawn(function()
                         local handle = (drop:IsA("BasePart") and drop)
                             or drop:FindFirstChild("Handle")
                             or drop:FindFirstChildWhichIsA("BasePart", true)
-                        local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                        if handle and hrp then
+                        local prompt = drop:FindFirstChildWhichIsA("ProximityPrompt", true)
+                        if handle then
                             foundMapFruit = true
                             currentTargetPart = nil
-                            currentFarmState = "🍎 Coletando Fruta no Mapa: " .. drop.Name
-                            hrp.CFrame = handle.CFrame
-                            if firetouchinterest then
-                                pcall(firetouchinterest, hrp, handle, 0)
-                                pcall(firetouchinterest, hrp, handle, 1)
+                            local fLabel = (prompt and prompt.ObjectText ~= "" and prompt.ObjectText) or drop.Name
+                            currentFarmState = "🍎 Coletando Fruta no Mapa: " .. tostring(fLabel)
+                            local t0 = os.clock()
+                            while drop and drop.Parent == droppedFolder and os.clock() - t0 < 5.5 and getgenv().ENI_HubId == HubId do
+                                local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                                if not hrp then break end
+                                hrp.CFrame = handle.CFrame * CFrame.new(0, 3.5, 0)
+                                hrp.AssemblyLinearVelocity = Vector3.zero
+                                task.wait(0.25)
+                                if prompt then
+                                    pcall(function()
+                                        prompt.HoldDuration = 0
+                                        prompt.MaxActivationDistance = 30
+                                        prompt.RequiresLineOfSight = false
+                                        prompt.Enabled = true
+                                    end)
+                                    if fireproximityprompt then pcall(fireproximityprompt, prompt) end
+                                    pcall(function()
+                                        prompt:InputHoldBegin()
+                                        task.wait(0.05)
+                                        prompt:InputHoldEnd()
+                                    end)
+                                end
+                                if firetouchinterest then
+                                    pcall(firetouchinterest, hrp, handle, 0)
+                                    pcall(firetouchinterest, hrp, handle, 1)
+                                end
+                                task.wait(0.22)
                             end
-                            if fireproximityprompt then
-                                local prompt = drop:FindFirstChildWhichIsA("ProximityPrompt", true)
-                                if prompt then pcall(fireproximityprompt, prompt) end
+                            task.wait(0.35)
+                            if cfg.AutoStoreFruits then
+                                storeAllFruitsInHub()
                             end
-                            task.wait(0.25)
                         end
                     end
                 end
             end
 
-            -- 5. AUTO-GUARDAR FRUTAS NO STORAGE
+            -- 5. AUTO-GUARDAR FRUTAS NO STORAGE (CHECA CHARACTER E BACKPACK)
             if cfg.AutoStoreFruits then
-                local gd = getGameData()
-                local itemsData = gd and gd["Items Data"]
-                if LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
-                    for _, tool in ipairs(LocalPlayer.Backpack:GetChildren()) do
-                        if tool:IsA("Tool") and ((itemsData and itemsData[tool.Name] and itemsData[tool.Name].Category == "Fruits") or string.find(tool.Name, "Fruit")) then
-                            LocalPlayer.Character.Humanoid:EquipTool(tool)
-                            task.wait(0.25)
-                            safeFireRemote(PhysicalFruitsRemote, "Storage", tool.Name)
-                            if cfg.WebhookUrl ~= "" then
-                                task.spawn(function()
-                                    sendGGMAXWebhook("🍎 Nova Fruta Guardada: " .. tool.Name)
-                                end)
-                            end
-                        end
-                    end
-                end
+                storeAllFruitsInHub()
             end
 
             -- 6. AUTO-GIRAR FRUTA (LUZEFE COM TELEPORTE + 5.8s ROLL + AUTO-STORAGE)
@@ -1195,15 +1258,15 @@ task.spawn(function()
                 end
             end
 
-            -- 11. TURBO TASK FARM MULTI-TIER 100% ANTI-KICK (LEVEL 35 -> 245 MAX + DINHEIRO INFINITO ATÉ $1M)
+            -- 11. TURBO TASK FARM MULTI-TIER 100% ANTI-KICK (LEVEL 100 -> 245 MAX + DINHEIRO INFINITO ATÉ $1M)
             local matTarget = getPriorityMaterialTarget()
             local needMoney = (money < math.min(1000000, math.max(cfg.TargetMoneyGGMAX or 500000, 350000)))
-            if cfg.TurboTaskFarm and level >= 35 and (level < 245 or needMoney or not matTarget) then
+            if cfg.TurboTaskFarm and level >= 100 and (level < 245 or needMoney or not matTarget) then
                 currentTargetPart = nil
                 local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 
-                -- TIER 4: LEVEL 200 -> 244 => QUEST 028 (Heal Sorcerers Event: +144,380 EXP a cada 3.5s!)
-                if level >= 200 and level < 245 then
+                -- TIER 3: LEVEL 215 -> 244 => QUEST 028 (Heal Sorcerers Event: +144,380 EXP a cada 3.5s!)
+                if level >= 215 and level < 245 then
                     local healRemote = SpecialsFolder and SpecialsFolder:FindFirstChild("Heal Sorcerers Event")
                     local ptsFolder = Workspace:FindFirstChild("World")
                         and Workspace.World:FindFirstChild("Islands")
@@ -1237,8 +1300,8 @@ task.spawn(function()
                         end
                     end
 
-                -- TIER 3: LEVEL 165 -> 199 => QUEST 025 (Cursed Dolls Event: +36,938 EXP a cada 5.2s!)
-                elseif level >= 165 and level < 200 and money >= 250000 then
+                -- TIER 2: LEVEL 180 -> 214 => QUEST 025 (Cursed Dolls Event: +36,938 EXP a cada 5.2s!)
+                elseif level >= 180 and level < 215 then
                     local dollsRemote = SpecialsFolder and SpecialsFolder:FindFirstChild("Cursed Dolls Event")
                     local ptsFolder = Workspace:FindFirstChild("World")
                         and Workspace.World:FindFirstChild("Islands")
@@ -1246,7 +1309,7 @@ task.spawn(function()
                         and Workspace.World.Islands["Sorcerers-Island"]:FindFirstChild("Curse Dools Quest")
                         and Workspace.World.Islands["Sorcerers-Island"]["Curse Dools Quest"]:FindFirstChild("Points")
                     local pts = ptsFolder and ptsFolder:GetChildren() or {}
-                    currentFarmState = string.format("⚡ TURBO XP [Quest 025 Cursed Dolls] Lvl %d -> 200 (+36.9k XP/5s)", level)
+                    currentFarmState = string.format("⚡ TURBO XP [Quest 025 Cursed Dolls] Lvl %d -> 215 (+36.9k XP/5s)", level)
                     if questId ~= "025" and questId ~= "None" then
                         safeFireRemote(QuestRemote, "Quit")
                         task.wait(0.15)
@@ -1264,7 +1327,7 @@ task.spawn(function()
                     end
                     if dollsRemote and hrp and #pts >= 5 then
                         for i = 1, 5 do
-                            if getgenv().ENI_HubId ~= HubId or not getgenv().ENI_Config.TurboTaskFarm or ps.Infos.Level.Value >= 200 then break end
+                            if getgenv().ENI_HubId ~= HubId or not getgenv().ENI_Config.TurboTaskFarm or ps.Infos.Level.Value >= 215 then break end
                             hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
                             if hrp then hrp.CFrame = pts[i].CFrame + Vector3.new(0, 2, 0) end
                             task.wait(1.05)
@@ -1272,13 +1335,13 @@ task.spawn(function()
                         end
                     end
 
-                -- TIER 2 & TIER 5: LEVEL 85 -> 164 (OU FARM DE DINHEIRO INFINITO ATÉ $1,000,000) => ELEMENTS QUEST
-                elseif level >= 85 then
+                -- TIER 1 & TIER 4: LEVEL 100 -> 179 (OU FARM DE DINHEIRO INFINITO ATÉ $1,000,000) => ELEMENTS QUEST
+                elseif level >= 100 then
                     if hrp and (hrp.Position - Vector3.new(660.7, 5, 2687.1)).Magnitude > 250 then
                         hrp.CFrame = CFrame.new(660.7, 5, 2687.1)
                     end
                     if level < 245 then
-                        currentFarmState = string.format("⚡ Turbo Level & Money [ElementsQuest] Lvl %d (+2k XP / +$500)", level)
+                        currentFarmState = string.format("⚡ Turbo Level & Money [ElementsQuest] Lvl %d -> 180 (+2k XP / +$500)", level)
                     else
                         currentFarmState = string.format("💰 Money Infinito [ElementsQuest] ($%d / $1,000,000)", money)
                     end
@@ -1291,41 +1354,6 @@ task.spawn(function()
                     for _, el in ipairs({"Blue Element", "Red Element", "Pink Element", "Yellow Element"}) do
                         if getgenv().ENI_HubId ~= HubId or not getgenv().ENI_Config.TurboTaskFarm then break end
                         safeFireRemote(DialogueRemote, {"ElementsQuest", el})
-                    end
-
-                -- TIER 1: LEVEL 35 -> 84 => QUEST 008 (Coletar Banana Event: +4,925 EXP sem precisar matar mobs!)
-                elseif level >= 35 and level < 85 then
-                    local bananaRemote = SpecialsFolder and SpecialsFolder:FindFirstChild("Coletar Banana Event")
-                    local ptsFolder = Workspace:FindFirstChild("World")
-                        and Workspace.World:FindFirstChild("Islands")
-                        and Workspace.World.Islands:FindFirstChild("Jungles-Island")
-                        and Workspace.World.Islands["Jungles-Island"]:FindFirstChild("Coletar Banana Quest")
-                        and Workspace.World.Islands["Jungles-Island"]["Coletar Banana Quest"]:FindFirstChild("Points")
-                    local pts = ptsFolder and ptsFolder:GetChildren() or {}
-                    currentFarmState = string.format("🍌 Fast Level [Quest 008 Bananas] Lvl %d -> 85 (+4.9k XP)", level)
-                    if questId ~= "008" and questId ~= "None" then
-                        safeFireRemote(QuestRemote, "Quit")
-                        task.wait(0.15)
-                    end
-                    if hrp then
-                        if #pts >= 6 then
-                            hrp.CFrame = pts[1].CFrame + Vector3.new(0, 2, 0)
-                        else
-                            hrp.CFrame = CFrame.new(-905.7, 12.0, 104.0)
-                        end
-                    end
-                    if ps.Quest.QuestId.Value == "None" then
-                        safeFireRemote(DialogueRemote, {"Quest", "008"})
-                        task.wait(0.2)
-                    end
-                    if bananaRemote and hrp and #pts >= 6 then
-                        for i = 1, 6 do
-                            if getgenv().ENI_HubId ~= HubId or not getgenv().ENI_Config.TurboTaskFarm or ps.Infos.Level.Value >= 85 then break end
-                            hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                            if hrp then hrp.CFrame = pts[i].CFrame + Vector3.new(0, 2, 0) end
-                            task.wait(1.0)
-                            pcall(bananaRemote.FireServer, bananaRemote, "ColetarBanana")
-                        end
                     end
                 end
 
