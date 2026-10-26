@@ -176,6 +176,16 @@ local CombatQuests = {
     {id = "010", lvl = 70,  mobs = {"King Monkey"},                              boss = true,  island = "JungleIsland",    pos = Vector3.new(-1158.0, 9.2, -14.8)},
     {id = "011", lvl = 75,  mobs = {"Red Brawler"},                              boss = false, island = "WestIsland",      pos = Vector3.new(785.6, 3.1, 2682.9)},
     {id = "013", lvl = 90,  mobs = {"Robot"},                                    boss = false, island = "WestIsland",      pos = Vector3.new(379.2, 3.2, 3183.6)},
+    {id = "014", lvl = 105, mobs = {"Robot King"},                               boss = true,  island = "WestIsland",      pos = Vector3.new(379.2, 3.2, 3266.6)},
+    {id = "016", lvl = 115, mobs = {"Robot 15", "Robot 16"},                     boss = true,  island = "WestIsland",      pos = Vector3.new(1309.8, 2.8, 3566.8)},
+    {id = "017", lvl = 120, mobs = {"Crimson King"},                             boss = true,  island = "WestIsland",      pos = Vector3.new(240.7, 2.8, 3515.5)},
+    {id = "019", lvl = 130, mobs = {"Frieza"},                                   boss = true,  island = "WestIsland",      pos = Vector3.new(1103.1, 2.9, 2762.2)},
+    {id = "020", lvl = 135, mobs = {"Corrupted Player"},                         boss = false, island = "OnlineIsland",    pos = Vector3.new(3697.9, 30.6, 2578.0)},
+    {id = "021", lvl = 150, mobs = {"Pro Player"},                               boss = false, island = "OnlineIsland",    pos = Vector3.new(3335.0, 30.6, 2777.0)},
+    {id = "024", lvl = 165, mobs = {"Jujutsu Student"},                          boss = false, island = "SorcerersIsland", pos = Vector3.new(4154.9, 6.8, 44.7)},
+    {id = "026", lvl = 190, mobs = {"Special Student"},                          boss = false, island = "SorcerersIsland", pos = Vector3.new(4504.3, 6.8, -14.4)},
+    {id = "027", lvl = 205, mobs = {"Overtime Sorcerer"},                        boss = true,  island = "SorcerersIsland", pos = Vector3.new(4687.0, 6.9, -79.7)},
+    {id = "029", lvl = 225, mobs = {"White Panda"},                              boss = true,  island = "SorcerersIsland", pos = Vector3.new(4603.3, 6.8, 205.7)},
 }
 
 local QuestById = {}
@@ -1241,107 +1251,29 @@ task.spawn(function()
                 end
             end
 
-            -- 11. TURBO TASK FARM MULTI-TIER 100% ANTI-KICK (LEVEL 100 -> 245 MAX + DINHEIRO INFINITO ATÉ $1M)
+            -- 11. FARM DE DINHEIRO INFINITO COM TASKS INSTANTÂNEAS (APÓS LEVEL 245 MAX ATÉ $1.000.000)
             local matTarget = getPriorityMaterialTarget()
-            local needMoney = (money < math.min(1000000, math.max(cfg.TargetMoneyGGMAX or 500000, 350000)))
-            if cfg.TurboTaskFarm and level >= 100 and (level < 245 or needMoney or not matTarget) then
+            local targetMoneyCap = math.min(1000000, math.max(cfg.TargetMoneyGGMAX or 1000000, 500000))
+            if level >= 245 and money < targetMoneyCap then
                 currentTargetPart = nil
                 local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-
-                -- TIER 3: LEVEL 215 -> 244 => QUEST 028 (Heal Sorcerers Event: +144,380 EXP a cada 3.5s!)
-                if level >= 215 and level < 245 then
-                    local healRemote = SpecialsFolder and SpecialsFolder:FindFirstChild("Heal Sorcerers Event")
-                    local ptsFolder = Workspace:FindFirstChild("World")
-                        and Workspace.World:FindFirstChild("Islands")
-                        and Workspace.World.Islands:FindFirstChild("Sorcerers-Island")
-                        and Workspace.World.Islands["Sorcerers-Island"]:FindFirstChild("Heal Sorcerers Quest")
-                        and Workspace.World.Islands["Sorcerers-Island"]["Heal Sorcerers Quest"]:FindFirstChild("Points")
-                    local pts = ptsFolder and ptsFolder:GetChildren() or {}
-                    currentFarmState = string.format("⚡ ULTRA XP [Quest 028 Heal Sorcerers] Lvl %d -> 245 (+144.3k XP/3.5s)", level)
-                    if questId ~= "028" and questId ~= "None" then
-                        safeFireRemote(QuestRemote, "Quit")
-                        task.wait(0.15)
-                    end
-                    if hrp then
-                        if #pts >= 3 then
-                            hrp.CFrame = pts[1].CFrame + Vector3.new(0, 2, 0)
-                        else
-                            hrp.CFrame = CFrame.new(4509.2, 9.0, 337.5)
-                        end
-                    end
-                    if ps.Quest.QuestId.Value == "None" then
-                        safeFireRemote(DialogueRemote, {"Quest", "028"})
-                        task.wait(0.2)
-                    end
-                    if healRemote and hrp and #pts >= 3 then
-                        for i = 1, 3 do
-                            if getgenv().ENI_HubId ~= HubId or not getgenv().ENI_Config.TurboTaskFarm or ps.Infos.Level.Value >= 245 then break end
-                            hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                            if hrp then hrp.CFrame = pts[i].CFrame + Vector3.new(0, 2, 0) end
-                            task.wait(1.1)
-                            pcall(healRemote.FireServer, healRemote, "AjudarOsCaras")
-                        end
-                    end
-
-                -- TIER 2: LEVEL 180 -> 214 => QUEST 025 (Cursed Dolls Event: +36,938 EXP a cada 5.2s!)
-                elseif level >= 180 and level < 215 then
-                    local dollsRemote = SpecialsFolder and SpecialsFolder:FindFirstChild("Cursed Dolls Event")
-                    local ptsFolder = Workspace:FindFirstChild("World")
-                        and Workspace.World:FindFirstChild("Islands")
-                        and Workspace.World.Islands:FindFirstChild("Sorcerers-Island")
-                        and Workspace.World.Islands["Sorcerers-Island"]:FindFirstChild("Curse Dools Quest")
-                        and Workspace.World.Islands["Sorcerers-Island"]["Curse Dools Quest"]:FindFirstChild("Points")
-                    local pts = ptsFolder and ptsFolder:GetChildren() or {}
-                    currentFarmState = string.format("⚡ TURBO XP [Quest 025 Cursed Dolls] Lvl %d -> 215 (+36.9k XP/5s)", level)
-                    if questId ~= "025" and questId ~= "None" then
-                        safeFireRemote(QuestRemote, "Quit")
-                        task.wait(0.15)
-                    end
-                    if hrp then
-                        if #pts >= 5 then
-                            hrp.CFrame = pts[1].CFrame + Vector3.new(0, 2, 0)
-                        else
-                            hrp.CFrame = CFrame.new(4239.4, 9.5, 116.1)
-                        end
-                    end
-                    if ps.Quest.QuestId.Value == "None" then
-                        safeFireRemote(DialogueRemote, {"Quest", "025"})
-                        task.wait(0.2)
-                    end
-                    if dollsRemote and hrp and #pts >= 5 then
-                        for i = 1, 5 do
-                            if getgenv().ENI_HubId ~= HubId or not getgenv().ENI_Config.TurboTaskFarm or ps.Infos.Level.Value >= 215 then break end
-                            hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                            if hrp then hrp.CFrame = pts[i].CFrame + Vector3.new(0, 2, 0) end
-                            task.wait(1.05)
-                            pcall(dollsRemote.FireServer, dollsRemote, "CollectCurseDoll")
-                        end
-                    end
-
-                -- TIER 1 & TIER 4: LEVEL 100 -> 179 (OU FARM DE DINHEIRO INFINITO ATÉ $1,000,000) => ELEMENTS QUEST
-                elseif level >= 100 then
-                    if hrp and (hrp.Position - Vector3.new(660.7, 5, 2687.1)).Magnitude > 250 then
-                        hrp.CFrame = CFrame.new(660.7, 5, 2687.1)
-                    end
-                    if level < 245 then
-                        currentFarmState = string.format("⚡ Turbo Level & Money [ElementsQuest] Lvl %d -> 180 (+2k XP / +$500)", level)
-                    else
-                        currentFarmState = string.format("💰 Money Infinito [ElementsQuest] ($%d / $1,000,000)", money)
-                    end
-                    if questId ~= "ElementsQuest" and questId ~= "None" then
-                        safeFireRemote(QuestRemote, "Quit")
-                    end
-                    if ps.Quest.QuestId.Value == "None" then
-                        safeFireRemote(DialogueRemote, {"Quest", "ElementsQuest"})
-                    end
-                    for _, el in ipairs({"Blue Element", "Red Element", "Pink Element", "Yellow Element"}) do
-                        if getgenv().ENI_HubId ~= HubId or not getgenv().ENI_Config.TurboTaskFarm then break end
-                        safeFireRemote(DialogueRemote, {"ElementsQuest", el})
-                    end
+                if hrp and (hrp.Position - Vector3.new(660.7, 5, 2687.1)).Magnitude > 150 then
+                    hrp.CFrame = CFrame.new(660.7, 5, 2687.1)
+                end
+                currentFarmState = string.format("💰 Farm Dinheiro Infinito [ElementsQuest] ($%d / $%d)", money, targetMoneyCap)
+                if questId ~= "ElementsQuest" and questId ~= "None" then
+                    safeFireRemote(QuestRemote, "Quit")
+                end
+                if ps.Quest.QuestId.Value == "None" then
+                    safeFireRemote(DialogueRemote, {"Quest", "ElementsQuest"})
+                end
+                for _, el in ipairs({"Blue Element", "Red Element", "Pink Element", "Yellow Element"}) do
+                    if getgenv().ENI_HubId ~= HubId or ps.Infos.Money.Value >= targetMoneyCap then break end
+                    safeFireRemote(DialogueRemote, {"ElementsQuest", el})
                 end
 
             -- 12. PRIORIDADE DE MATERIAIS ESPECÍFICOS APÓS LEVEL MAX (SOULS / GEARS / MAGIC BALL)
-            elseif matTarget and cfg.AutoFarmCombat then
+            elseif matTarget and cfg.AutoFarmCombat and level >= 245 then
                 local mob = findAliveMobForList(matTarget.mobs)
                 if mob then
                     local mhrp = mob:FindFirstChild("HumanoidRootPart")
@@ -1368,8 +1300,8 @@ task.spawn(function()
                     currentFarmState = matTarget.reason .. " (Aguardando Respawn)"
                 end
 
-            -- 13. COMBAT AUTO-FARM PROGRESSIVO (LEVEL 0 -> 99 COM TROCA DE ILHAS GARANTIDA)
-            elseif cfg.AutoFarmCombat then
+            -- 13. COMBAT AUTO-FARM PROGRESSIVO (LEVEL 0 -> 245 MAX)
+            elseif cfg.AutoFarmCombat and level < 245 then
                 local targetQuest = getBestQuestForLevel(level)
                 local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 
